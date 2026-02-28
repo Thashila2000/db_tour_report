@@ -1,0 +1,253 @@
+import { useState } from "react";
+import { FiCheckSquare, FiPlus, FiTrash2 } from "react-icons/fi";
+import StepShell from "../StepShell";
+
+// ── Data shapes ───────────────────────────────────────────────────────────────
+export interface ActionRow {
+  id:      string;
+  action:  string;
+  comment: string;
+  isFixed: boolean;
+}
+
+export interface ActionsAgreedData {
+  rows: ActionRow[];
+}
+
+// ── Default fixed rows ────────────────────────────────────────────────────────
+const DEFAULT_ROWS: ActionRow[] = [
+  { id: "a1", action: "Increase sales focus",         comment: "", isFixed: true },
+  { id: "a2", action: "Expedite stock replenishment", comment: "", isFixed: true },
+  { id: "a3", action: "Improve outlet coverage",      comment: "", isFixed: true },
+];
+
+const newRow = (): ActionRow => ({
+  id:      Math.random().toString(36).slice(2, 8),
+  action:  "",
+  comment: "",
+  isFixed: false,
+});
+
+// ── Prop types ────────────────────────────────────────────────────────────────
+interface Props {
+  totalSteps:   number;
+  stepNumber:   number;
+  initialData?: ActionsAgreedData;
+  onNext:       (data: ActionsAgreedData) => void;
+  onBack:       () => void;
+}
+
+// Scaled up cellInput
+const cellInput: React.CSSProperties = {
+  width:         "100%",
+  padding:       "10px 14px", // Increased padding
+  borderRadius:  "8px",
+  border:        "1.5px solid #4a6d8c",
+  background:    "rgba(22,73,118,0.04)",
+  color:         "#0a1f33",
+  fontSize:      "14px", // Increased font size
+  fontFamily:    "'DM Sans', sans-serif",
+  outline:       "none",
+  transition:    "all 0.2s ease",
+};
+
+// ── Component ─────────────────────────────────────────────────────────────────
+const ActionsAgreedStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: Props) => {
+  const [rows, setRows]   = useState<ActionRow[]>(initialData?.rows ?? DEFAULT_ROWS);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const handleChange = (id: string, field: keyof ActionRow, value: string) => {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+    if (errors[`${id}-${field}`])
+      setErrors((prev) => ({ ...prev, [`${id}-${field}`]: "" }));
+  };
+
+  const addRow    = () => setRows((prev) => [...prev, newRow()]);
+  const removeRow = (id: string) => setRows((prev) => prev.filter((r) => r.id !== id));
+
+  const validate = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    rows.forEach((r) => {
+      if (!r.action)  newErrors[`${r.id}-action`]  = "required";
+      if (!r.comment) newErrors[`${r.id}-comment`] = "required";
+    });
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleNext = () => {
+    if (validate()) onNext({ rows });
+  };
+
+  return (
+    <StepShell
+      stepNumber={stepNumber}
+      totalSteps={totalSteps}
+      title="Actions Agreed with DB"
+      Icon={FiCheckSquare}
+      onNext={handleNext}
+      onBack={onBack}
+    >
+      {/* Table */}
+      <div style={{ overflowX: "auto", borderRadius: "14px", border: "2px solid #4a6d8c" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
+          <thead>
+            <tr style={{ background: "linear-gradient(135deg, #164976, #1e6aad)" }}>
+              {["Action", "Comments", ""].map((h, i) => (
+                <th key={i} style={{
+                  padding: "16px 14px", // Increased padding
+                  textAlign: "left", 
+                  fontSize: "13px", // Increased font size
+                  fontWeight: 700, 
+                  color: "white", 
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase", 
+                  whiteSpace: "nowrap",
+                  width: i === 2 ? "60px" : "auto",
+                }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => {
+              const actionErr  = !!errors[`${row.id}-action`];
+              const commentErr = !!errors[`${row.id}-comment`];
+              return (
+                <tr key={row.id} style={{
+                  background:   idx % 2 === 0 ? "#ffffff" : "rgba(22,73,118,0.03)",
+                  borderBottom: "1px solid rgba(22,73,118,0.12)",
+                }}>
+                  {/* Action */}
+                  <td style={{ padding: "12px 14px" }}>
+                    {row.isFixed ? (
+                      <input
+                        type="text"
+                        value={row.action}
+                        readOnly
+                        style={{
+                          ...cellInput,
+                          border: "1.5px solid transparent",
+                          background: "rgba(22,73,118,0.06)",
+                          color: "#164976", 
+                          fontWeight: 700, 
+                          cursor: "default",
+                        }}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={row.action}
+                        placeholder="Enter action"
+                        onChange={(e) => handleChange(row.id, "action", e.target.value)}
+                        style={{ ...cellInput, border: actionErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }}
+                        onFocus={(e) => {
+                          e.target.style.border    = "1.5px solid #164976";
+                          e.target.style.boxShadow = "0 0 0 3px rgba(22,73,118,0.10)";
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.border    = actionErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c";
+                          e.target.style.boxShadow = "none";
+                        }}
+                      />
+                    )}
+                  </td>
+
+                  {/* Comment */}
+                  <td style={{ padding: "12px 14px" }}>
+                    <input
+                      type="text"
+                      value={row.comment}
+                      placeholder="Enter comments"
+                      onChange={(e) => handleChange(row.id, "comment", e.target.value)}
+                      style={{ ...cellInput, border: commentErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }}
+                      onFocus={(e) => {
+                        e.target.style.border    = "1.5px solid #164976";
+                        e.target.style.boxShadow = "0 0 0 3px rgba(22,73,118,0.10)";
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.border    = commentErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c";
+                        e.target.style.boxShadow = "none";
+                      }}
+                    />
+                  </td>
+
+                  {/* Delete */}
+                  <td style={{ padding: "12px 14px", textAlign: "center" }}>
+                    {!row.isFixed ? (
+                      <button
+                        onClick={() => removeRow(row.id)}
+                        title="Remove"
+                        style={{
+                          width: "36px", // Increased size
+                          height: "36px", 
+                          borderRadius: "10px",
+                          border: "none", 
+                          background: "rgba(220,38,38,0.08)",
+                          color: "#dc2626", 
+                          cursor: "pointer",
+                          display: "flex", 
+                          alignItems: "center", 
+                          justifyContent: "center",
+                          transition: "all 0.2s ease",
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget as HTMLElement).style.background = "rgba(220,38,38,0.18)"
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget as HTMLElement).style.background = "rgba(220,38,38,0.08)"
+                        }
+                      >
+                        <FiTrash2 size={16} />
+                      </button>
+                    ) : <span />}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {Object.keys(errors).length > 0 && (
+        <p className="text-sm text-red-400 font-medium" style={{ marginTop: "8px" }}>
+          Please fill in all required fields before proceeding.
+        </p>
+      )}
+
+      {/* Add Action Button */}
+      <button
+        onClick={addRow}
+        style={{
+          display: "flex", 
+          alignItems: "center", 
+          gap: "10px",
+          padding: "12px 24px", // Increased padding
+          borderRadius: "12px",
+          border: "1.5px dashed #4a6d8c", 
+          background: "rgba(22,73,118,0.03)",
+          color: "#164976", 
+          fontSize: "15px", // Increased font size
+          fontWeight: 600,
+          fontFamily: "'DM Sans', sans-serif", 
+          cursor: "pointer",
+          transition: "all 0.2s ease", 
+          alignSelf: "flex-start",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.background  = "rgba(22,73,118,0.08)";
+          (e.currentTarget as HTMLElement).style.borderColor = "#164976";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background  = "rgba(22,73,118,0.03)";
+          (e.currentTarget as HTMLElement).style.borderColor = "#4a6d8c";
+        }}
+      >
+        <FiPlus size={16} /> Add Action
+      </button>
+    </StepShell>
+  );
+};
+
+export default ActionsAgreedStep;
