@@ -61,7 +61,7 @@ const cellInputStyle = (readOnly = false): React.CSSProperties => ({
   width:         "100%",
   padding:       "10px 14px", // Scaled up
   borderRadius:  "8px",
-  border:        `2px solid ${readOnly ? "transparent" : "#4a6d8c"}`, // Thicker border
+  border:        `2px solid ${readOnly ? "transparent" : "#4a6d8c"}`,   
   background:    readOnly ? "rgba(22,73,118,0.06)" : "rgba(22,73,118,0.04)",
   color:         readOnly ? "#4a6d8c" : "#0a1f33",
   fontSize:      "14px", // Increased from 12px

@@ -1,8 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// InputField.tsx
-// Shared reusable input component used across all step forms.
-// Renders a labelled input with animated inline validation error.
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -49,19 +45,20 @@ const InputField = ({
       className="w-full p-3 rounded-xl text-sm outline-none transition-all duration-200"
       style={{
         background:  "rgba(22, 73, 118, 0.04)",
-        border:      error ? "1.5px solid #f87171" : "1.5px solid #4a6d8c",
+        border:      error ? "2px solid #f87171" : "2px solid #4a6d8c",
         color:       "#0a1f33",
         fontFamily:  "'DM Sans', sans-serif",
+        fontWeight:  600,  //
       }}
       onFocus={(e) => {
-        e.target.style.border     = "1.5px solid #164976";
+        e.target.style.border     = "2px solid #164976";
         e.target.style.background = "rgba(22,73,118,0.07)";
         e.target.style.boxShadow  = "0 0 0 3px rgba(22,73,118,0.10)";
       }}
       onBlur={(e) => {
         e.target.style.border     = error
-          ? "1.5px solid #f87171"
-          : "1.5px solid #4a6d8c";
+          ? "2px solid #f87171"
+          : "2px solid #4a6d8c";
         e.target.style.background = "rgba(22, 73, 118, 0.04)";
         e.target.style.boxShadow  = "none";
       }}

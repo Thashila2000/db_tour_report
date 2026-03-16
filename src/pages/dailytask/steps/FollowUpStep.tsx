@@ -49,16 +49,16 @@ interface Props {
 
 // Scaled up cellInput
 const cellInput: React.CSSProperties = {
-  width:         "100%",
-  padding:       "10px 14px", // Increased padding
-  borderRadius:  "8px",
-  border:        "1.5px solid #4a6d8c",
-  background:    "rgba(22,73,118,0.04)",
-  color:         "#0a1f33",
-  fontSize:      "14px", // Increased font size
-  fontFamily:    "'DM Sans', sans-serif",
-  outline:       "none",
-  transition:    "all 0.2s ease",
+  width:          "100%",
+  padding:        "10px 14px",
+  borderRadius:   "8px",
+  border:         "1.5px solid #4a6d8c",
+  background:     "rgba(22,73,118,0.04)",
+  color:          "#0a1f33",
+  fontSize:       "14px",
+  fontFamily:     "'DM Sans', sans-serif",
+  outline:        "none",
+  transition:     "all 0.2s ease",
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -86,7 +86,11 @@ const FollowUpStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: P
   };
 
   const handleNext = () => {
-    if (validate()) onNext({ rows });
+    if (validate()) {
+      // ✅ We pass the rows exactly as they are. 
+      // Your parent component should map these to match the FollowUpRequest DTO
+      onNext({ rows });
+    }
   };
 
   return (
@@ -98,16 +102,16 @@ const FollowUpStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: P
       onNext={handleNext}
       onBack={onBack}
     >
-      {/* Table */}
+      {/* Table Container */}
       <div style={{ overflowX: "auto", borderRadius: "14px", border: "2px solid #4a6d8c" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
           <thead>
             <tr style={{ background: "linear-gradient(135deg, #164976, #1e6aad)" }}>
               {["Action", "Responsible", "Deadline", ""].map((h, i) => (
                 <th key={i} style={{
-                  padding: "16px 14px", // Increased padding
+                  padding: "16px 14px", 
                   textAlign: "left", 
-                  fontSize: "13px", // Increased font size
+                  fontSize: "13px", 
                   fontWeight: 700, 
                   color: "white", 
                   letterSpacing: "0.06em",
@@ -127,11 +131,11 @@ const FollowUpStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: P
               const ds        = deadlineStyle(row.deadline);
               return (
                 <tr key={row.id} style={{
-                  background:   idx % 2 === 0 ? "#ffffff" : "rgba(22,73,118,0.03)",
+                  background:    idx % 2 === 0 ? "#ffffff" : "rgba(22,73,118,0.03)",
                   borderBottom: "1px solid rgba(22,73,118,0.12)",
                 }}>
 
-                  {/* Action */}
+                  {/* Action Column */}
                   <td style={{ padding: "12px 14px" }}>
                     {row.isFixed ? (
                       <input
@@ -140,7 +144,7 @@ const FollowUpStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: P
                         readOnly
                         style={{
                           ...cellInput,
-                          border: "1.5px solid transparent",
+                          border: "2px solid transparent",
                           background: "rgba(22,73,118,0.06)",
                           color: "#164976", 
                           fontWeight: 700, 
@@ -153,39 +157,39 @@ const FollowUpStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: P
                         value={row.action}
                         placeholder="Enter action"
                         onChange={(e) => handleChange(row.id, "action", e.target.value)}
-                        style={{ ...cellInput, border: actionErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }}
+                        style={{ ...cellInput, border: actionErr ? "2px solid #f87171" : "2px solid #4a6d8c" }}
                         onFocus={(e) => {
-                          e.target.style.border    = "1.5px solid #164976";
+                          e.target.style.border    = "2px solid #164976";
                           e.target.style.boxShadow = "0 0 0 3px rgba(22,73,118,0.10)";
                         }}
                         onBlur={(e) => {
-                          e.target.style.border    = actionErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c";
+                          e.target.style.border    = actionErr ? "2px solid #f87171" : "2px solid #4a6d8c";
                           e.target.style.boxShadow = "none";
                         }}
                       />
                     )}
                   </td>
 
-                  {/* Responsible */}
+                  {/* Responsible Column */}
                   <td style={{ padding: "12px 14px" }}>
                     <input
                       type="text"
                       value={row.responsible}
                       placeholder="Enter responsible person"
                       onChange={(e) => handleChange(row.id, "responsible", e.target.value)}
-                      style={{ ...cellInput, border: respErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }}
+                      style={{ ...cellInput, border: respErr ? "2px solid #f87171" : "2px solid #4a6d8c" }}
                       onFocus={(e) => {
-                        e.target.style.border    = "1.5px solid #164976";
+                        e.target.style.border    = "2px solid #164976";
                         e.target.style.boxShadow = "0 0 0 3px rgba(22,73,118,0.10)";
                       }}
                       onBlur={(e) => {
-                        e.target.style.border    = respErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c";
+                        e.target.style.border    = respErr ? "2px solid #f87171" : "2px solid #4a6d8c";
                         e.target.style.boxShadow = "none";
                       }}
                     />
                   </td>
 
-                  {/* Deadline */}
+                  {/* Deadline Column */}
                   <td style={{ padding: "12px 14px" }}>
                     <select
                       value={row.deadline}
@@ -194,10 +198,10 @@ const FollowUpStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: P
                         width: "100%", 
                         padding: "10px 14px", 
                         borderRadius: "8px",
-                        border: "1.5px solid #4a6d8c",
+                        border: "2px solid #4a6d8c",
                         background: ds.bg, 
                         color: ds.color,
-                        fontSize: "14px", // Increased font size
+                        fontSize: "14px",
                         fontWeight: 600,
                         fontFamily: "'DM Sans', sans-serif",
                         outline: "none", 
@@ -211,11 +215,12 @@ const FollowUpStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: P
                     </select>
                   </td>
 
-                  {/* Delete */}
+                  {/* Delete Column */}
                   <td style={{ padding: "12px 14px", textAlign: "center" }}>
                     {!row.isFixed ? (
                       <button
                         onClick={() => removeRow(row.id)}
+                        type="button"
                         title="Remove"
                         style={{
                           width: "36px", 
@@ -249,7 +254,7 @@ const FollowUpStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: P
       </div>
 
       {Object.keys(errors).length > 0 && (
-        <p className="text-sm text-red-400 font-medium" style={{ marginTop: "8px" }}>
+        <p style={{ color: "#dc2626", fontSize: "14px", fontWeight: 500, marginTop: "8px" }}>
           Please fill in all required fields before proceeding.
         </p>
       )}
@@ -257,21 +262,23 @@ const FollowUpStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: P
       {/* Add Follow-Up Button */}
       <button
         onClick={addRow}
+        type="button"
         style={{
           display: "flex", 
           alignItems: "center", 
           gap: "10px",
-          padding: "12px 24px", // Increased padding
+          padding: "12px 24px",
           borderRadius: "12px",
           border: "1.5px dashed #4a6d8c", 
           background: "rgba(22,73,118,0.03)",
           color: "#164976", 
-          fontSize: "15px", // Increased font size
+          fontSize: "15px",
           fontWeight: 600,
           fontFamily: "'DM Sans', sans-serif", 
           cursor: "pointer",
           transition: "all 0.2s ease", 
           alignSelf: "flex-start",
+          marginTop: "10px"
         }}
         onMouseEnter={(e) => {
           (e.currentTarget as HTMLElement).style.background  = "rgba(22,73,118,0.08)";

@@ -59,6 +59,7 @@ const DEFAULT_CATEGORIES: StockCategory[] = [
     items: [
       { id: "s1", itemName: "", stockLevel: "", systemStock: "" },
       { id: "s2", itemName: "", stockLevel: "", systemStock: "" },
+      { id: "s3", itemName: "", stockLevel: "", systemStock: "" },
     ],
   },
   {
@@ -66,7 +67,7 @@ const DEFAULT_CATEGORIES: StockCategory[] = [
     items: [
       { id: "cr1", itemName: "", stockLevel: "", systemStock: "" },
       { id: "cr2", itemName: "", stockLevel: "", systemStock: "" },
-      { id: "cr3", itemName: "", stockLevel: "", systemStock: "" },
+      
     ],
   },
   {
@@ -75,12 +76,7 @@ const DEFAULT_CATEGORIES: StockCategory[] = [
       { id: "g1", itemName: "", stockLevel: "", systemStock: "" },
     ],
   },
-  {
-    id: "wafers", name: "Wafers", comment: "",
-    items: [
-      { id: "w1", itemName: "", stockLevel: "", systemStock: "" },
-    ],
-  },
+ 
 ];
 
 // ── Prop types ────────────────────────────────────────────────────────────────
@@ -260,14 +256,14 @@ const StockStatusStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }
                             }
                             style={{
                               ...cellInput,
-                              border: nameErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c",
+                              border: nameErr ? "1.5px solid #f87171" : "2px solid #4a6d8c",
                             }}
                             onFocus={(e) => {
-                              e.target.style.border    = "1.5px solid #164976";
+                              e.target.style.border    = "2px solid #164976";
                               e.target.style.boxShadow = "0 0 0 3px rgba(22,73,118,0.10)";
                             }}
                             onBlur={(e) => {
-                              e.target.style.border    = nameErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c";
+                              e.target.style.border    = nameErr ? "2px solid #f87171" : "2px solid #4a6d8c";
                               e.target.style.boxShadow = "none";
                             }}
                           />
@@ -285,14 +281,14 @@ const StockStatusStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }
                             }
                             style={{
                               ...cellInput,
-                              border: levelErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c",
+                              border: levelErr ? "2px solid #f87171" : "2px solid #4a6d8c",
                             }}
                             onFocus={(e) => {
-                              e.target.style.border    = "1.5px solid #164976";
+                              e.target.style.border    = "2px solid #164976";
                               e.target.style.boxShadow = "0 0 0 3px rgba(22,73,118,0.10)";
                             }}
                             onBlur={(e) => {
-                              e.target.style.border    = levelErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c";
+                              e.target.style.border    = levelErr ? "2px solid #f87171" : "2px solid #4a6d8c";
                               e.target.style.boxShadow = "none";
                             }}
                           />
@@ -310,14 +306,14 @@ const StockStatusStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }
                             }
                             style={{
                               ...cellInput,
-                              border: sysErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c",
+                              border: sysErr ? "2px solid #f87171" : "2px solid #4a6d8c",
                             }}
                             onFocus={(e) => {
-                              e.target.style.border    = "1.5px solid #164976";
+                              e.target.style.border    = "2px solid #164976";
                               e.target.style.boxShadow = "0 0 0 3px rgba(22,73,118,0.10)";
                             }}
                             onBlur={(e) => {
-                              e.target.style.border    = sysErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c";
+                              e.target.style.border    = sysErr ? "2px solid #f87171" : "2px solid #4a6d8c";
                               e.target.style.boxShadow = "none";
                             }}
                           />
@@ -332,7 +328,7 @@ const StockStatusStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }
                             placeholder="Auto"
                             style={{
                               ...cellInput,
-                              border:     "1.5px solid transparent",
+                              border:     "2px solid transparent",
                               background: "rgba(22,73,118,0.04)",
                               color:      variance.color,
                               fontWeight: variance.value ? 700 : 400,
@@ -377,7 +373,7 @@ const StockStatusStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }
                   width:        "100%",
                   padding:      "10px 12px",
                   borderRadius: "8px",
-                  border:       "1.5px solid #4a6d8c",
+                  border:       "2px solid #4a6d8c",
                   background:   "rgba(22,73,118,0.04)",
                   color:        "#0a1f33",
                   fontSize:     "14px",
@@ -387,11 +383,11 @@ const StockStatusStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }
                   transition:   "all 0.2s ease",
                 }}
                 onFocus={(e) => {
-                  e.target.style.border    = "1.5px solid #164976";
+                  e.target.style.border    = "2px solid #164976";
                   e.target.style.boxShadow = "0 0 0 3px rgba(22,73,118,0.10)";
                 }}
                 onBlur={(e) => {
-                  e.target.style.border    = "1.5px solid #4a6d8c";
+                  e.target.style.border    = "2px solid #4a6d8c";
                   e.target.style.boxShadow = "none";
                 }}
               />

@@ -1,9 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// DailyTask.tsx — Main Orchestrator
-// Owns the stepper UI, progress state, and all collected form data.
-// Passes `initialData` back into each step so inputs survive back navigation.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 
@@ -12,108 +6,105 @@ import {
   FiMapPin, FiHome, FiBarChart2, FiPackage,
   FiAlertTriangle, FiCheckSquare,
   FiBell, FiFileText, FiCheck, FiClipboard,
-
 } from "react-icons/fi";
 
-// ── Step components (add imports here as each step file is created) ───────────
+// ── Step components ───────────────────────────────────────────────────────────
 import VisitDetailsStep from "./steps/VisitDetailsStep";
 import type { VisitDetailsData } from "./steps/VisitDetailsStep";
-
 import DBProfileStep from "./steps/DBProfileStep";
 import type { DBProfileData } from "./steps/DBProfileStep";
-
 import SalesPerformanceStep from "./steps/SalesPerformanceStep";
 import type { SalesPerformanceData } from "./steps/SalesPerformanceStep";
-
 import StockStatusStep from "./steps/StockStatusStep";
 import type { StockStatusData } from "./steps/StockStatusStep";
-
 import IssuesIdentifiedStep from "./steps/IssuesIdentifiedStep";
 import type { IssuesIdentifiedData } from "./steps/IssuesIdentifiedStep";
-
 import ActionsAgreedStep from "./steps/ActionsAgreedStep";
 import type { ActionsAgreedData } from "./steps/ActionsAgreedStep";
-
 import FollowUpStep from "./steps/FollowUpStep";
 import type { FollowUpData } from "./steps/FollowUpStep";
-
 import RemarksStep from "./steps/RemarksStep";
 import type { RemarksData } from "./steps/RemarksStep";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stepper metadata — label + icon shown in the progress bar
+// Stepper metadata
 // ─────────────────────────────────────────────────────────────────────────────
 const STEPS = [
-  { label: "Visit Details",     Icon: FiMapPin        },
-  { label: "DB Profile",        Icon: FiHome          },
-  { label: "Sales Snapshot",    Icon: FiBarChart2     },
-  { label: "Stock Status",      Icon: FiPackage       },
+  { label: "Visit Details",     Icon: FiMapPin         },
+  { label: "DB Profile",        Icon: FiHome           },
+  { label: "Sales Snapshot",    Icon: FiBarChart2      },
+  { label: "Stock Status",      Icon: FiPackage        },
   { label: "Issues Identified", Icon: FiAlertTriangle },
-  { label: "Actions Agreed",    Icon: FiCheckSquare   },
-  { label: "Follow Up",         Icon: FiBell          },
-  { label: "Remarks",           Icon: FiFileText      },
+  { label: "Actions Agreed",    Icon: FiCheckSquare    },
+  { label: "Follow Up",         Icon: FiBell           },
+  { label: "Remarks",           Icon: FiFileText       },
 ];
 
 const TOTAL = STEPS.length;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Collected form data — one key per step, grows as steps are built
-// ─────────────────────────────────────────────────────────────────────────────
 interface AllFormData {
-  visitDetails?:    VisitDetailsData;
-  dbProfile?:       DBProfileData;
+  visitDetails?:     VisitDetailsData;
+  dbProfile?:        DBProfileData;
   salesPerformance?: SalesPerformanceData;
   stockStatus?:      StockStatusData;
   issuesIdentified?: IssuesIdentifiedData;
   actionsAgreed?:    ActionsAgreedData;
   followUp?:         FollowUpData;
   remarks?:          RemarksData;
-  // Add more step data types here as you build them
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DailyTask — orchestrates navigation and persists data across steps
-// ─────────────────────────────────────────────────────────────────────────────
 const DailyTask = () => {
-  // Active step index (1-based)
   const [currentStep, setCurrentStep] = useState(1);
-
-  // Aggregated data from all steps — this is what gets passed back as initialData
   const [allData, setAllData] = useState<AllFormData>({});
+  
+ 
+const [loggedInUser] = useState<any>(() => {
+  const stored = localStorage.getItem("user");
+  return stored ? JSON.parse(stored) : null;
+});
 
-  // Whether the final report has been submitted
-  const [submitted, setSubmitted] = useState(false);
-
-  // Scroll to top whenever the step changes
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [currentStep]);
 
-  // ── Navigation ─────────────────────────────────────────────────────────────
+  // ── Helper: Inject Metadata & Report ID ─────────────────────────────────────
+  const wrapWithMetadata = (data: any) => {
+    const visitDetails = JSON.parse(localStorage.getItem("visitDetails") || "{}");
+    const reportGroupId = localStorage.getItem("reportGroupId");
 
-  // Save this step's data into allData, then advance
+    return {
+      ...data,
+      reportGroupId: reportGroupId,
+      userName: loggedInUser?.name || "Unknown User",
+      userRole: `${loggedInUser?.role || "ASM"} ${visitDetails.area ?? ""}`,
+    };
+  };
+
+  // ── Navigation ─────────────────────────────────────────────────────────────
   const goNext = (key: keyof AllFormData, data: any) => {
     setAllData((prev) => ({ ...prev, [key]: data }));
     if (currentStep < TOTAL) setCurrentStep((s) => s + 1);
   };
 
-  // Step back — allData is preserved, each step reads it via initialData prop
   const goBack = () => {
     if (currentStep > 1) setCurrentStep((s) => s - 1);
   };
 
   const goToStep = (stepNumber: number) => {
-  setCurrentStep(stepNumber);
-};
-
-  // Final submit on the last step
-  const handleSubmit = () => {
-    console.log("✅ Report submitted:", allData);
-    setSubmitted(true);
+    setCurrentStep(stepNumber);
   };
 
-  // Progress bar fill percentage
   const progressPct = ((currentStep - 1) / (TOTAL - 1)) * 100;
+
+  // ✅ Top-Level Safety: If no user, show error instead of broken form
+  if (!loggedInUser) {
+    return (
+      <div style={{ padding: "50px", textAlign: "center", color: "#164976" }}>
+        <h2>Access Denied</h2>
+        <p>Please log in to continue.</p>
+      </div>
+    );
+  }
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -168,7 +159,6 @@ const DailyTask = () => {
           margin: 0 0 2rem 0;
         }
 
-        /* ── Stepper ──────────────────────────────────────────────────────── */
         .stepper-wrapper {
           margin-bottom: 2.5rem;
           overflow-x: auto;
@@ -229,7 +219,6 @@ const DailyTask = () => {
         .step-label.active   { color: #164976; font-weight: 600; }
         .step-label.upcoming { color: #94a9be; }
 
-        /* ── Shared form styles (used by all step components) ────────────── */
         .form-section-title {
           font-family: 'Sora', sans-serif;
           font-size: 1.05rem;
@@ -300,11 +289,6 @@ const DailyTask = () => {
         .btn-primary:hover  { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(22,73,118,0.38); }
         .btn-primary:active { transform: translateY(0); }
 
-        /* Placeholder for unbuilt steps */
-        .placeholder-content { text-align: center; padding: 3rem 2rem; color: #94a9be; }
-        .placeholder-icon { display: flex; justify-content: center; margin-bottom: 1rem; opacity: 0.35; }
-        .placeholder-text { font-size: 14px; }
-
         @media (max-width: 540px) {
           .form-grid-2 { grid-template-columns: 1fr; }
           .dtr-card    { padding: 1.25rem; }
@@ -313,173 +297,191 @@ const DailyTask = () => {
         .stepper-wrapper::-webkit-scrollbar       { height: 4px; }
         .stepper-wrapper::-webkit-scrollbar-track { background: transparent; }
         .stepper-wrapper::-webkit-scrollbar-thumb { background: rgba(22,73,118,0.18); border-radius: 10px; }
-
-        /* Success screen */
-        .success-screen { text-align: center; padding: 3rem 1rem; }
-        .success-icon {
-          width: 64px; height: 64px;
-          background: linear-gradient(135deg, #164976, #2e81c3);
-          border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-          margin: 0 auto 1.5rem;
-          box-shadow: 0 8px 24px rgba(22,73,118,0.30);
-        }
-        .success-title {
-          font-family: 'Sora', sans-serif;
-          font-size: 1.5rem; font-weight: 800; color: #0c2340; margin: 0 0 0.5rem;
-        }
-        .success-sub { font-size: 14px; color: #6e90b0; }
       `}</style>
 
-      {/* ── Page Root ──────────────────────────────────────────────────────── */}
       <div className="dtr-root">
         <div className="dtr-card">
-
-          {/* ── Header ───────────────────────────────────────────────────── */}
           <div className="dtr-header-badge">
             <FiClipboard size={12} /> DB Visit Report
           </div>
           <h1 className="dtr-title">Daily Task Report</h1>
-          <p className="dtr-subtitle ">Track your distributor visits and performance reviews</p>
+          <p className="dtr-subtitle">Track your distributor visits and performance reviews</p>
 
           {/* ── Stepper ──────────────────────────────────────────────────── */}
-          {!submitted && (
-            <div className="stepper-wrapper">
-              <div className="stepper-inner">
-                <div className="stepper-track">
-                  <div className="stepper-fill" style={{ width: `${progressPct}%` }} />
-                </div>
-                {STEPS.map(({ label, Icon }, i) => {
-                  const n = i + 1;
-                  const state = n < currentStep ? "done" : n === currentStep ? "active" : "upcoming";
-                  return (
-                    <div key={i} className="step-item">
-                     <motion.div
-  className={`step-bubble ${state}`}
-  onClick={() => goToStep(n)}
-  style={{ cursor: "pointer" }}
-  animate={{ scale: state === "active" ? 1.18 : 1 }}
-  transition={{ type: "spring", stiffness: 300, damping: 20 }}
->
-                        {state === "done" ? <FiCheck size={15} strokeWidth={3} /> : <Icon size={15} />}
-                      </motion.div>
-                      <span className={`step-label ${state}`}>{label}</span>
-                    </div>
-                  );
-                })}
+          <div className="stepper-wrapper">
+            <div className="stepper-inner">
+              <div className="stepper-track">
+                <div className="stepper-fill" style={{ width: `${progressPct}%` }} />
               </div>
+              {STEPS.map(({ label, Icon }, i) => {
+                const n = i + 1;
+                const state = n < currentStep ? "done" : n === currentStep ? "active" : "upcoming";
+                return (
+                  <div key={i} className="step-item">
+                    <motion.div
+                      className={`step-bubble ${state}`}
+                      onClick={() => goToStep(n)}
+                      style={{ cursor: "pointer" }}
+                      animate={{ scale: state === "active" ? 1.18 : 1 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                    >
+                      {state === "done" ? <FiCheck size={15} strokeWidth={3} /> : <Icon size={15} />}
+                    </motion.div>
+                    <span className={`step-label ${state}`}>{label}</span>
+                  </div>
+                );
+              })}
             </div>
-          )}
+          </div>
 
-          {/* ── Step Content — all steps stay mounted, only active one shown ── */}
-          {!submitted && (
-            <div style={{ position: "relative" }}>
+          {/* ── Step Content ───────────────────────────────────────────── */}
+          <div style={{ position: "relative" }}>
+            
+            {/* Step 1: Visit Details (The Generator) */}
+            <div style={{ display: currentStep === 1 ? "block" : "none" }}>
+              {loggedInUser && (
+                <VisitDetailsStep 
+                  totalSteps={TOTAL} 
+                  stepNumber={1} 
+                  initialData={allData.visitDetails} 
+                  onNext={(data) => {
+                    // ✅ Generate Unique Report ID once here
+                    const reportGroupId = `RPT-${data.dbCode}-${Date.now()}`;
+                    localStorage.setItem("reportGroupId", reportGroupId);
 
-              {/* Step 1: Visit Details */}
-              <div style={{ display: currentStep === 1 ? "block" : "none" }}>
-                <VisitDetailsStep
-                  totalSteps={TOTAL}
-                  stepNumber={1}
-                  initialData={allData.visitDetails}
-                  onNext={(data) => goNext("visitDetails", data)}
+                    const payload = { ...data, reportGroupId };
+                    localStorage.setItem("visitDetails", JSON.stringify(payload));
+                    goNext("visitDetails", payload);
+                  }}
+                  onBack={goBack}
+                  username={loggedInUser.name}  
+                  role={loggedInUser.role}       
+                  roleValue=""                   
                 />
-              </div>
+              )}
+            </div>
 
-              {/* Step 2: DB Profile */}
-              <div style={{ display: currentStep === 2 ? "block" : "none" }}>
+            {/* Step 2: DB Profile */}
+            <div style={{ display: currentStep === 2 ? "block" : "none" }}>
+              {loggedInUser && (
                 <DBProfileStep
                   totalSteps={TOTAL}
                   stepNumber={2}
                   initialData={allData.dbProfile}
-                  onNext={(data) => goNext("dbProfile", data)}
+                  username={loggedInUser.name}
+                  onNext={(data) => {
+                    const payload = wrapWithMetadata(data);
+                    // Add legacy specific key for DB Profile
+                    payload.createdByName = loggedInUser.name;
+                    localStorage.setItem("dbProfile", JSON.stringify(payload));
+                    goNext("dbProfile", payload);
+                  }}
                   onBack={goBack}
                 />
-              </div>
+              )}
+            </div>
 
-              {/* Step 3: Sales Performance */}
-              <div style={{ display: currentStep === 3 ? "block" : "none" }}>
+            {/* Step 3: Sales Performance */}
+            <div style={{ display: currentStep === 3 ? "block" : "none" }}>
+              {loggedInUser && (
                 <SalesPerformanceStep
                   totalSteps={TOTAL}
                   stepNumber={3}
                   initialData={allData.salesPerformance}
-                  onNext={(data) => goNext("salesPerformance", data)}
+                  onNext={(data) => {
+                    const payload = wrapWithMetadata(data);
+                    localStorage.setItem("salesPerformance", JSON.stringify(payload));
+                    goNext("salesPerformance", payload);
+                  }}
                   onBack={goBack}
                 />
-              </div>
-
-              {/* Step 4: Stock Status */}
-              <div style={{ display: currentStep === 4 ? "block" : "none" }}>
-                <StockStatusStep
-                  totalSteps={TOTAL}
-                  stepNumber={4}
-                  initialData={allData.stockStatus}
-                  onNext={(data) => goNext("stockStatus", data)}
-                  onBack={goBack}
-                />
-              </div>
-
-              {/* Step 5: Issues Identified */}
-              <div style={{ display: currentStep === 5 ? "block" : "none" }}>
-                <IssuesIdentifiedStep
-                  totalSteps={TOTAL}
-                  stepNumber={5}
-                  initialData={allData.issuesIdentified}
-                  onNext={(data) => goNext("issuesIdentified", data)}
-                  onBack={goBack}
-                />
-              </div>
-
-              {/* Step 6: Actions Agreed */}
-              <div style={{ display: currentStep === 6 ? "block" : "none" }}>
-                <ActionsAgreedStep
-                  totalSteps={TOTAL}
-                  stepNumber={6}
-                  initialData={allData.actionsAgreed}
-                  onNext={(data) => goNext("actionsAgreed", data)}
-                  onBack={goBack}
-                />
-              </div>
-
-              {/* Step 7: Follow-Up */}
-              <div style={{ display: currentStep === 7 ? "block" : "none" }}>
-                <FollowUpStep
-                  totalSteps={TOTAL}
-                  stepNumber={7}
-                  initialData={allData.followUp}
-                  onNext={(data) => goNext("followUp", data)}
-                  onBack={goBack}
-                />
-              </div>
-
-              {/* Step 8: Remarks — final step */}
-              <div style={{ display: currentStep === 8 ? "block" : "none" }}>
-                <RemarksStep
-                  totalSteps={TOTAL}
-                  stepNumber={8}
-                  initialData={allData.remarks}
-                  onNext={(data) => { goNext("remarks", data); handleSubmit(); }}
-                  onBack={goBack}
-                />
-              </div>
+              )}
             </div>
-          )}
 
-          {/* ── Success screen ────────────────────────────────────────── */}
-          {submitted && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-              className="success-screen"
-            >
-              <div className="success-icon">
-                <FiCheck size={28} color="#fff" strokeWidth={3} />
-              </div>
-              <h2 className="success-title">Report Submitted!</h2>
-              <p className="success-sub">Your daily task report has been recorded successfully.</p>
-            </motion.div>
-          )}
+            {/* Step 4: Stock Status */}
+            <div style={{ display: currentStep === 4 ? "block" : "none" }}>
+              <StockStatusStep
+                totalSteps={TOTAL}
+                stepNumber={4}
+                initialData={allData.stockStatus}
+                onNext={(data) => {
+                  const payload = wrapWithMetadata(data);
+                  localStorage.setItem("stockStatus", JSON.stringify(payload));
+                  goNext("stockStatus", payload);
+                }}
+                onBack={goBack}
+              />
+            </div>
 
+            {/* Step 5: Issues Identified */}
+            <div style={{ display: currentStep === 5 ? "block" : "none" }}>
+              <IssuesIdentifiedStep
+                totalSteps={TOTAL}
+                stepNumber={5}
+                initialData={allData.issuesIdentified}
+                onNext={(data) => {
+                  const payload = wrapWithMetadata(data);
+                  localStorage.setItem("issuesIdentified", JSON.stringify(payload));
+                  goNext("issuesIdentified", payload);
+                }}
+                onBack={goBack}
+              />
+            </div>
+
+            {/* Step 6: Actions Agreed */}
+            <div style={{ display: currentStep === 6 ? "block" : "none" }}>
+              <ActionsAgreedStep
+                totalSteps={TOTAL}
+                stepNumber={6}
+                initialData={allData.actionsAgreed}
+                onNext={(data) => {
+                  const payload = wrapWithMetadata(data);
+                  localStorage.setItem("actionsAgreed", JSON.stringify(payload));
+                  goNext("actionsAgreed", payload);
+                }}
+                onBack={goBack}
+                visitDetails={JSON.parse(localStorage.getItem("visitDetails") || "{}")}  
+              />
+            </div>
+
+            {/* Step 7: Follow-Up */}
+            <div style={{ display: currentStep === 7 ? "block" : "none" }}>
+              <FollowUpStep
+                totalSteps={TOTAL}
+                stepNumber={7}
+                initialData={allData.followUp}
+                onNext={(data) => {
+                  // FollowUp mapping to DTO
+                  const baseData = {
+                    rows: data.rows.map((r: any) => ({
+                      action: r.action,
+                      responsible: r.responsible,
+                      deadline: r.deadline
+                    }))
+                  };
+                  const payload = wrapWithMetadata(baseData);
+                  localStorage.setItem("followUp", JSON.stringify(payload));
+                  goNext("followUp", payload);
+                }}
+                onBack={goBack}
+              />
+            </div>
+
+            {/* Step 8: Remarks */}
+            <div style={{ display: currentStep === 8 ? "block" : "none" }}>
+              <RemarksStep
+                totalSteps={TOTAL}
+                stepNumber={8}
+                initialData={allData.remarks}
+                onNext={(data) => {
+                  const payload = wrapWithMetadata(data);
+                  localStorage.setItem("remarks", JSON.stringify(payload));
+                  goNext("remarks", payload);
+                }}
+                onBack={goBack}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </>

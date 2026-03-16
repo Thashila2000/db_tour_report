@@ -1,4 +1,4 @@
-import { FaTasks, FaHome, FaMapMarkerAlt } from "react-icons/fa";
+import { FaTasks, FaMapMarkerAlt } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
 interface SidebarProps {
@@ -7,9 +7,10 @@ interface SidebarProps {
 }
 
 const NAV_ITEMS = [
-  { to: "/",              end: true,  icon: FaHome,          label: "Home"        },
+ 
   { to: "/daily-task",   end: false, icon: FaTasks,         label: "Daily Task"  },
   { to: "/market-execution",  end: false, icon: FaMapMarkerAlt,  label: "Field Visit" },
+  { to: "/reports", end: false, icon: FaTasks, label: "Reports" },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, closeSidebar }) => {
@@ -59,7 +60,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, closeSidebar }) => {
 
         {/* Nav items */}
         <nav style={{ padding: "0 12px", flex: 1 }}>
-          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
+          <ul style={{ listStyle: "none", margin: 0, padding: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
             {NAV_ITEMS.map(({ to, end, icon: Icon, label }) => (
               <li key={to}>
                 <NavLink

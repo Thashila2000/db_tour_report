@@ -1,12 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// steps/DBProfileStep.tsx  — Step 2 of 9
-// Captures DB profile details: owner, coverage, route strength, sales team,
-// vehicles, log book, territory map, route plan, financials, and store info.
-//
-// Accepts `initialData` from the parent so inputs are restored
-// when the user navigates back to this step.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { useState } from "react";
 import { FiHome, FiUpload } from "react-icons/fi";
 import InputField from "../InputField";
@@ -22,13 +13,18 @@ export interface DBProfileData {
   logBookUpdate:         string;
   territoryRouteMap:     "yes" | "no" | "";
   routeMapImage:         File | null;
+  routeMapImageBase64?:  string | null;
   routePlan:             "yes" | "no" | "";
   routePlanImage:        File | null;
+  routePlanImageBase64?: string | null;
   creditBillCount:       string;
   creditBillTotal:       string;
   chequeCount:           string;
   chequeTotal:           string;
   cashTotal:             string;
+  progressSheetUpdate:   string;
+  skuSalesUpdate:        "low" | "high" | "";
+  skuSalesComment:       string;
   storeLength:           string;
   storeWidth:            string;
   storeCondition:        string;
@@ -38,7 +34,38 @@ export interface DBProfileData {
   storeComments:         string;
 }
 
-// ── Default empty state ───────────────────────────────────────────────────────
+// ── Image Compression Utility ────────────────────────────────────────────────
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_WIDTH = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        resolve(dataUrl);
+      };
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 const EMPTY: DBProfileData = {
   dbOwnerContact:        "",
   coverageArea:          "",
@@ -55,6 +82,9 @@ const EMPTY: DBProfileData = {
   chequeCount:           "",
   chequeTotal:           "",
   cashTotal:             "",
+  progressSheetUpdate:   "",
+  skuSalesUpdate:        "",
+  skuSalesComment:       "",
   storeLength:           "",
   storeWidth:            "",
   storeCondition:        "",
@@ -64,491 +94,374 @@ const EMPTY: DBProfileData = {
   storeComments:         "",
 };
 
-// ── Prop types ────────────────────────────────────────────────────────────────
 interface Props {
   totalSteps:   number;
   stepNumber:   number;
-  initialData?: DBProfileData;                   // Restored data when stepping back
+  initialData?: DBProfileData;
   onNext:       (data: DBProfileData) => void;
   onBack:       () => void;
+  username:     string;
 }
 
-// ── RadioField — styled yes/no radio group ────────────────────────────────────
-const RadioField = ({
-  label,
-  value,
-  onChange,
-  error,
-}: {
-  label:    string;
-  value:    string;
-  onChange: (val: "yes" | "no") => void;
-  error?:   string;
-}) => (
+// ── Internal Components ──────────────────────────────────────────────────────
+const RadioField = ({ label, value, onChange, error, options }: any) => (
   <div className="flex flex-col gap-2">
-    <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#4a6d8c" }}>
-      {label}
-    </span>
+    <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#4a6d8c" }}>{label}</span>
     <div style={{ display: "flex", gap: "1.5rem" }}>
-      {(["yes", "no"] as const).map((option) => (
-        <label
-          key={option}
-          style={{
-            display:    "flex",
-            alignItems: "center",
-            gap:        "8px",
-            cursor:     "pointer",
-            fontSize:   "13px",
-            fontWeight: value === option ? 600 : 400,
-            color:      value === option ? "#164976" : "#6e90b0",
-          }}
-        >
-          <div
-            onClick={() => onChange(option)}
-            style={{
-              width:          "18px",
-              height:         "18px",
-              borderRadius:   "50%",
-              border:         value === option ? "2px solid #164976" : "2px solid #4a6d8c",
-              background:     value === option ? "#164976" : "#f5f8fc",
-              display:        "flex",
-              alignItems:     "center",
-              justifyContent: "center",
-              transition:     "all 0.2s ease",
-              flexShrink:     0,
-            }}
-          >
-            {value === option && (
-              <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "white" }} />
-            )}
+      {options.map((option: any) => (
+        <label key={option.value} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", fontWeight: value === option.value ? 600 : 400, color: value === option.value ? "#164976" : "#6e90b0" }}>
+          <div onClick={() => onChange(option.value)} style={{ width: "18px", height: "18px", borderRadius: "50%", border: value === option.value ? "2px solid #164976" : "2px solid #4a6d8c", background: value === option.value ? "#164976" : "#f5f8fc", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s ease", flexShrink: 0 }}>
+            {value === option.value && <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "white" }} />}
           </div>
-          {option.charAt(0).toUpperCase() + option.slice(1)}
+          {option.label}
         </label>
       ))}
     </div>
-    {/* Inline error */}
     {error && <p className="text-xs text-red-400 font-medium">{error}</p>}
   </div>
 );
 
-// ── FileUploadField — styled dashed file input ────────────────────────────────
-const FileUploadField = ({
-  label,
-  name,
-  onChange,
-  fileName,
-}: {
-  label:    string;
-  name:     string;
-  onChange: (file: File | null) => void;
-  fileName: string;
-}) => (
+const FileUploadField = ({ label, name, onChange, fileName }: any) => (
   <div className="flex flex-col gap-1">
-    <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#4a6d8c" }}>
-      {label}
-    </span>
-    <label
-      htmlFor={name}
-      style={{
-        display:      "flex",
-        alignItems:   "center",
-        gap:          "10px",
-        padding:      "12px",
-        borderRadius: "12px",
-        border:       "1.5px dashed #4a6d8c",
-        background:   "rgba(22,73,118,0.03)",
-        cursor:       "pointer",
-        fontSize:     "13px",
-        color:        fileName ? "#164976" : "#94a9be",
-        transition:   "all 0.2s ease",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor = "#164976";        (e.currentTarget as HTMLElement).style.background  = "rgba(22,73,118,0.07)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor = "#4a6d8c";
-        (e.currentTarget as HTMLElement).style.background  = "rgba(22,73,118,0.03)";
-      }}
-    >
-      <FiUpload size={15} style={{ color: "#164976", flexShrink: 0 }} />
+    <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#4a6d8c" }}>{label}</span>
+    <label htmlFor={name} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px", borderRadius: "12px", border: "1.5px dashed #4a6d8c", background: "rgba(22,73,118,0.03)", cursor: "pointer", fontSize: "13px", color: fileName ? "#164976" : "#94a9be" }}>
+      <FiUpload size={15} style={{ color: "#164976" }} />
       {fileName || "Click to upload image"}
-      <input
-        id={name}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-      />
+      <input id={name} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => onChange(e.target.files?.[0] ?? null)} />
     </label>
   </div>
 );
 
-// ── TextAreaField — styled resizable textarea ─────────────────────────────────
-const TextAreaField = ({
-  label,
-  name,
-  placeholder,
-  value,
-  onChange,
-}: {
-  label:       string;
-  name:        string;
-  placeholder: string;
-  value:       string;
-  onChange:    (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-}) => (
+const TextAreaField = ({ label, name, placeholder, value, onChange, error }: any) => (
   <div className="flex flex-col gap-1">
-    <label
-      htmlFor={name}
-      className="text-xs font-semibold uppercase tracking-widest"
-      style={{ color: "#4a6d8c" }}
-    >
-      {label}
-    </label>
-    <textarea
-      id={name}
-      name={name}
-      placeholder={placeholder}
-      value={value}
-      onChange={onChange}
-      rows={3}
-      style={{
-        width:        "100%",
-        padding:      "12px",
-        borderRadius: "12px",
-        border:       "1.5px solid #4a6d8c",
-        background:   "rgba(22,73,118,0.04)",
-        color:        "#0f2d4a",
-        fontSize:     "13px",
-        fontFamily:   "'DM Sans', sans-serif",
-        outline:      "none",
-        resize:       "vertical",
-        transition:   "all 0.2s ease",
-      }}
-      onFocus={(e) => {
-        e.target.style.border     = "1.5px solid #164976";
-        e.target.style.background = "rgba(22,73,118,0.07)";
-        e.target.style.boxShadow  = "0 0 0 3px rgba(22,73,118,0.10)";
-      }}
-      onBlur={(e) => {
-        e.target.style.border     = "1.5px solid #4a6d8c";
-        e.target.style.background = "rgba(22,73,118,0.04)";
-        e.target.style.boxShadow  = "none";
-      }}
+    <label htmlFor={name} className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#4a6d8c" }}>{label}</label>
+    <textarea 
+      id={name} 
+      name={name} 
+      placeholder={placeholder} 
+      value={value} 
+      onChange={onChange} 
+      rows={3} 
+      style={{ 
+        width: "100%", 
+        padding: "12px", 
+        borderRadius: "12px", 
+        border: error ? "1.5px solid #f87171" : "1.5px solid #4a6d8c", 
+        background: "rgba(22,73,118,0.04)", 
+        color: "#0f2d4a", 
+        fontSize: "13px", 
+        outline: "none", 
+        resize: "vertical" 
+      }} 
     />
+    {error && <p className="text-xs text-red-400 font-medium">{error}</p>}
   </div>
 );
 
-// ── SectionDivider — sub-section heading ─────────────────────────────────────
 const SectionDivider = ({ title }: { title: string }) => (
-  <div
-    style={{
-      display:       "flex",
-      alignItems:    "center",
-      gap:           "10px",
-      margin:        "1.5rem 0 1rem",
-      paddingBottom: "8px",
-      borderBottom:  "1.5px solid rgba(22,73,118,0.10)",
-    }}
-  >
-    <span style={{ fontFamily: "'Sora', sans-serif", fontSize: "0.9rem", fontWeight: 700, color: "#164976" }}>
-      {title}
-    </span>
+  <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "1.5rem 0 1rem", paddingBottom: "8px", borderBottom: "1.5px solid rgba(22,73,118,0.10)" }}>
+    <span style={{ fontFamily: "'Sora', sans-serif", fontSize: "0.9rem", fontWeight: 700, color: "#164976" }}>{title}</span>
   </div>
 );
 
-// ── Component ─────────────────────────────────────────────────────────────────
-const DBProfileStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: Props) => {
-  // Seed from initialData if the user stepped back, otherwise use empty defaults
+// ── Main Component ────────────────────────────────────────────────────────────
+const DBProfileStep = ({ totalSteps, stepNumber, initialData, onNext, onBack, username }: Props) => {
   const [formData, setFormData] = useState<DBProfileData>(initialData ?? EMPTY);
-
-  // Per-field validation errors
   const [errors, setErrors] = useState<Partial<Record<keyof DBProfileData, string>>>({});
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  // ── Handlers ─────────────────────────────────────────────────────────────────
+  // ✅ Number validation helper
+  const isValidNumber = (value: string): boolean => {
+    return /^\d*\.?\d*$/.test(value); // Allows digits and optional decimal point
+  };
 
-  // Generic text / textarea input handler
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-    if (errors[e.target.name as keyof DBProfileData]) {
-      setErrors({ ...errors, [e.target.name]: "" });
+    const { name, value } = e.target;
+    
+    // ✅ Fields that must be numbers only
+    const numberFields = [
+      "creditBillCount", "creditBillTotal", "chequeCount", 
+      "chequeTotal", "cashTotal", "storeLength", "storeWidth", 
+      "tableCount", "chairCount"
+    ];
+    
+    // ✅ Validate number fields
+    if (numberFields.includes(name)) {
+      if (value !== "" && !isValidNumber(value)) {
+        return; // Don't update if not a valid number
+      }
+    }
+    
+    setFormData({ ...formData, [name]: value });
+    if (errors[name as keyof DBProfileData]) {
+      setErrors({ ...errors, [name]: "" });
     }
   };
 
-  // Radio yes/no handler — also clears the paired image when "no" is chosen
-  const handleRadio = (field: "territoryRouteMap" | "routePlan", val: "yes" | "no") => {
-    if (field === "territoryRouteMap") {
-      setFormData((p) => ({ ...p, territoryRouteMap: val, routeMapImage: val === "no" ? null : p.routeMapImage }));
-    } else {
-      setFormData((p) => ({ ...p, routePlan: val, routePlanImage: val === "no" ? null : p.routePlanImage }));
-    }
+  const handleRadio = (field: "territoryRouteMap" | "routePlan" | "skuSalesUpdate", val: string) => {
+    setFormData((p) => ({ 
+      ...p, 
+      [field]: val, 
+      ...(field === "territoryRouteMap" && val === "no" ? { routeMapImage: null } : {}),
+      ...(field === "routePlan" && val === "no" ? { routePlanImage: null } : {})
+    }));
     if (errors[field]) setErrors({ ...errors, [field]: "" });
   };
 
-  // File upload handler
-  const handleFile = (field: "routeMapImage" | "routePlanImage", file: File | null) => {
-    setFormData({ ...formData, [field]: file });
-  };
-
-  // Validate all required fields
   const validate = (): boolean => {
-    const newErrors: Partial<Record<keyof DBProfileData, string>> = {};
-    const required: [keyof DBProfileData, string][] = [
-      ["dbOwnerContact",       "DB Owner / Contact"],
-      ["coverageArea",         "Coverage Area"],
-      ["routeStrength",        "Route Strength"],
-      ["salesTeam",            "Sales Team"],
-      ["vehicleAvailability",  "Vehicle Availability"],
-      ["logBookUpdate",        "Log Book Update"],
-      ["territoryRouteMap",    "Territory Route Map"],
-      ["routePlan",            "Route Plan"],
-      ["creditBillCount",      "Credit Bill Count"],
-      ["creditBillTotal",      "Credit Bill Total"],
-      ["chequeCount",          "Cheque Count"],
-      ["chequeTotal",          "Cheque Total"],
-      ["cashTotal",            "Cash Total"],
-      ["storeLength",          "Store Length"],
-      ["storeWidth",           "Store Width"],
-      ["storeCondition",       "Store Condition"],
-      ["marketReturnCondition","Market Return Condition"],
-      ["tableCount",           "Table Count"],
-      ["chairCount",           "Chair Count"],
+    const newErrors: any = {};
+    
+    // Required text fields
+    const reqKeys: (keyof DBProfileData)[] = [
+      "dbOwnerContact", "coverageArea", "routeStrength", "salesTeam", 
+      "vehicleAvailability", "logBookUpdate", "territoryRouteMap", "routePlan", 
+      "creditBillCount", "creditBillTotal", "chequeCount", "chequeTotal", 
+      "cashTotal", "progressSheetUpdate", "skuSalesUpdate", "skuSalesComment",
+      "storeLength", "storeWidth", "storeCondition", "marketReturnCondition", 
+      "tableCount", "chairCount"
     ];
-    required.forEach(([key, label]) => {
-      if (!formData[key]) newErrors[key] = `${label} is required`;
+    
+    reqKeys.forEach(k => { 
+      if (!formData[k]) {
+        newErrors[k] = "Required";
+      }
     });
+    
+    // ✅ Validate number fields contain valid numbers
+    const numberFields: (keyof DBProfileData)[] = [
+      "creditBillCount", "creditBillTotal", "chequeCount", 
+      "chequeTotal", "cashTotal", "storeLength", "storeWidth", 
+      "tableCount", "chairCount"
+    ];
+    
+    numberFields.forEach(field => {
+      if (formData[field] && !isValidNumber(formData[field] as string)) {
+        newErrors[field] = "Must be a valid number";
+      }
+    });
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Pass data up if valid
-  const handleNext = () => {
-    if (validate()) onNext(formData);
+  const handleNext = async () => {
+    if (!validate()) return;
+    
+    setIsProcessing(true);
+    try {
+      const updatedData = { ...formData };
+      
+      // Compress Route Map
+      if (formData.territoryRouteMap === "yes" && formData.routeMapImage) {
+        updatedData.routeMapImageBase64 = await compressImage(formData.routeMapImage);
+      }
+      
+      // Compress Route Plan
+      if (formData.routePlan === "yes" && formData.routePlanImage) {
+        updatedData.routePlanImageBase64 = await compressImage(formData.routePlanImage);
+      }
+
+      // Add userName
+      (updatedData as any).userName = username;
+
+      // Pass to parent
+      onNext(updatedData);
+    } catch (err) {
+      console.error("Compression Error:", err);
+      alert("Error processing images. Try a different file.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <StepShell
-      stepNumber={stepNumber}
-      totalSteps={totalSteps}
-      title="DB Profile"
-      Icon={FiHome}
-      onNext={handleNext}
-      onBack={onBack}
-    >
-      {/* DB Owner & Coverage Area — side by side */}
+    <StepShell stepNumber={stepNumber} totalSteps={totalSteps} title="DB Profile" Icon={FiHome} onNext={handleNext} onBack={onBack}>
+      {/* Loading Overlay */}
+      {isProcessing && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center",
+          justifyContent: "center", zIndex: 9999
+        }}>
+          <div style={{
+            background: "white", padding: "30px 50px", borderRadius: "12px",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.3)", textAlign: "center"
+          }}>
+            <div style={{
+              width: "40px", height: "40px", border: "4px solid #f3f3f3",
+              borderTop: "4px solid #164976", borderRadius: "50%",
+              animation: "spin 1s linear infinite", margin: "0 auto 15px"
+            }} />
+            <p style={{ color: "#164976", fontWeight: 600, fontSize: "14px" }}>
+              Compressing images & saving...
+            </p>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+
       <div className="form-grid-2">
-        <InputField
-          label="DB Owner / Contact"
-          name="dbOwnerContact"
-          placeholder="e.g. Mr. Perera – 077-1234567"
-          value={formData.dbOwnerContact}
-          onChange={handleChange}
-          error={errors.dbOwnerContact}
-        />
-        <InputField
-          label="Coverage Area"
-          name="coverageArea"
-          placeholder="e.g. Colombo South"
-          value={formData.coverageArea}
-          onChange={handleChange}
-          error={errors.coverageArea}
-        />
+        <InputField label="DB Owner Contact" name="dbOwnerContact" placeholder="e.g. 077-1234567" value={formData.dbOwnerContact} onChange={handleChange} error={errors.dbOwnerContact} />
+        <InputField label="Coverage Area" name="coverageArea" placeholder="e.g. Colombo South" value={formData.coverageArea} onChange={handleChange} error={errors.coverageArea} />
+      </div>
+      <div className="form-grid-2">
+        <InputField label="Route Strength" name="routeStrength" placeholder="e.g. 5 routes" value={formData.routeStrength} onChange={handleChange} error={errors.routeStrength} />
+        <InputField label="Sales Team Attached" name="salesTeam" placeholder="e.g. 8 reps" value={formData.salesTeam} onChange={handleChange} error={errors.salesTeam} />
+      </div>
+      <div className="form-grid-2">
+        <InputField label="Vehicle Availability" name="vehicleAvailability" placeholder="e.g. 3 trucks" value={formData.vehicleAvailability} onChange={handleChange} error={errors.vehicleAvailability} />
+        <InputField label="Log Book Update" name="logBookUpdate" placeholder="e.g. Up to date" value={formData.logBookUpdate} onChange={handleChange} error={errors.logBookUpdate} />
       </div>
 
-      {/* Route Strength & Sales Team — side by side */}
-      <div className="form-grid-2">
-        <InputField
-          label="Route Strength"
-          name="routeStrength"
-          placeholder="e.g. 5 routes"
-          value={formData.routeStrength}
-          onChange={handleChange}
-          error={errors.routeStrength}
-        />
-        <InputField
-          label="Sales Team Attached"
-          name="salesTeam"
-          placeholder="e.g. 8 reps"
-          value={formData.salesTeam}
-          onChange={handleChange}
-          error={errors.salesTeam}
-        />
-      </div>
-
-      {/* Vehicle Availability & Log Book — side by side */}
-      <div className="form-grid-2">
-        <InputField
-          label="Vehicle Availability"
-          name="vehicleAvailability"
-          placeholder="e.g. 3 trucks available"
-          value={formData.vehicleAvailability}
-          onChange={handleChange}
-          error={errors.vehicleAvailability}
-        />
-        <InputField
-          label="Log Book Update"
-          name="logBookUpdate"
-          placeholder="e.g. Up to date"
-          value={formData.logBookUpdate}
-          onChange={handleChange}
-          error={errors.logBookUpdate}
-        />
-      </div>
-
-      {/* Territory Route Map — radio + conditional upload */}
-      <RadioField
-        label="Territory Route Map"
-        value={formData.territoryRouteMap}
-        onChange={(val) => handleRadio("territoryRouteMap", val)}
+      <RadioField 
+        label="Territory Route Map" 
+        value={formData.territoryRouteMap} 
+        onChange={(v:any) => handleRadio("territoryRouteMap", v)} 
         error={errors.territoryRouteMap}
+        options={[
+          { value: "yes", label: "Yes" },
+          { value: "no", label: "No" }
+        ]}
       />
-      {formData.territoryRouteMap === "yes" && (
-        <FileUploadField
-          label="Upload Route Map Image"
-          name="routeMapImage"
-          fileName={formData.routeMapImage?.name ?? ""}
-          onChange={(file) => handleFile("routeMapImage", file)}
-        />
-      )}
+      {formData.territoryRouteMap === "yes" && <FileUploadField label="Upload Route Map" name="routeMapImage" fileName={formData.routeMapImage?.name ?? ""} onChange={(f:any) => setFormData({...formData, routeMapImage: f})} />}
 
-      {/* Route Plan — radio + conditional upload */}
-      <RadioField
-        label="Route Plan"
-        value={formData.routePlan}
-        onChange={(val) => handleRadio("routePlan", val)}
+      <RadioField 
+        label="Route Plan" 
+        value={formData.routePlan} 
+        onChange={(v:any) => handleRadio("routePlan", v)} 
         error={errors.routePlan}
+        options={[
+          { value: "yes", label: "Yes" },
+          { value: "no", label: "No" }
+        ]}
       />
-      {formData.routePlan === "yes" && (
-        <FileUploadField
-          label="Upload Route Plan Image"
-          name="routePlanImage"
-          fileName={formData.routePlanImage?.name ?? ""}
-          onChange={(file) => handleFile("routePlanImage", file)}
-        />
-      )}
+      {formData.routePlan === "yes" && <FileUploadField label="Upload Route Plan" name="routePlanImage" fileName={formData.routePlanImage?.name ?? ""} onChange={(f:any) => setFormData({...formData, routePlanImage: f})} />}
 
-      {/* Credit Bill — count & total side by side */}
       <div className="form-grid-2">
-        <InputField
-          label="Credit Bill — No. of Bills"
-          name="creditBillCount"
+        <InputField 
+          label="Credit Bill Count" 
+          name="creditBillCount" 
           placeholder="e.g. 12"
-          value={formData.creditBillCount}
-          onChange={handleChange}
-          error={errors.creditBillCount}
+          value={formData.creditBillCount} 
+          onChange={handleChange} 
+          error={errors.creditBillCount} 
         />
-        <InputField
-          label="Credit Bill — Total Amount"
-          name="creditBillTotal"
-          placeholder="e.g. 250,000"
-          value={formData.creditBillTotal}
-          onChange={handleChange}
-          error={errors.creditBillTotal}
+        <InputField 
+          label="Credit Bill Total" 
+          name="creditBillTotal" 
+          placeholder="e.g. 250000"
+          value={formData.creditBillTotal} 
+          onChange={handleChange} 
+          error={errors.creditBillTotal} 
         />
       </div>
-
-      {/* Cheque in Hand — count & total side by side */}
       <div className="form-grid-2">
-        <InputField
-          label="Cheque in Hand — No. of Cheques"
-          name="chequeCount"
+        <InputField 
+          label="Cheque Count" 
+          name="chequeCount" 
           placeholder="e.g. 4"
-          value={formData.chequeCount}
-          onChange={handleChange}
-          error={errors.chequeCount}
+          value={formData.chequeCount} 
+          onChange={handleChange} 
+          error={errors.chequeCount} 
         />
-        <InputField
-          label="Cheque in Hand — Total Amount"
-          name="chequeTotal"
-          placeholder="e.g. 180,000"
-          value={formData.chequeTotal}
-          onChange={handleChange}
-          error={errors.chequeTotal}
+        <InputField 
+          label="Cheque Total" 
+          name="chequeTotal" 
+          placeholder="e.g. 180000"
+          value={formData.chequeTotal} 
+          onChange={handleChange} 
+          error={errors.chequeTotal} 
         />
       </div>
-
-      {/* Cash in Hand */}
-      <InputField
-        label="Cash in Hand — Total Amount"
-        name="cashTotal"
-        placeholder="e.g. 45,000"
-        value={formData.cashTotal}
-        onChange={handleChange}
-        error={errors.cashTotal}
+      <InputField 
+        label="Cash Total" 
+        name="cashTotal" 
+        placeholder="e.g. 45000"
+        value={formData.cashTotal} 
+        onChange={handleChange} 
+        error={errors.cashTotal} 
       />
 
-      {/* Sub-section: 1.1 Stores */}
+      {/* ✅ NEW SECTION: Progress Sheet Update */}
+      <SectionDivider title="Progress & SKU Updates" />
+      
+      <TextAreaField 
+        label="Progress Sheet Update" 
+        name="progressSheetUpdate" 
+        placeholder="Enter progress sheet update comment..."
+        value={formData.progressSheetUpdate} 
+        onChange={handleChange}
+        error={errors.progressSheetUpdate}
+      />
+
+      {/* ✅ NEW: SKU Sales Update */}
+      <RadioField 
+        label="SKU Sales Update" 
+        value={formData.skuSalesUpdate} 
+        onChange={(v:any) => handleRadio("skuSalesUpdate", v)} 
+        error={errors.skuSalesUpdate}
+        options={[
+          { value: "low", label: "Low" },
+          { value: "high", label: "High" }
+        ]}
+      />
+
+      {/* ✅ NEW: SKU Sales Comment */}
+      <TextAreaField 
+        label="SKU Sales Comment" 
+        name="skuSalesComment" 
+        placeholder="Enter SKU sales comment..."
+        value={formData.skuSalesComment} 
+        onChange={handleChange}
+        error={errors.skuSalesComment}
+      />
+
       <SectionDivider title="1.1 Stores" />
-
-      {/* Store Capacity — length & width side by side */}
       <div className="form-grid-2">
-        <InputField
-          label="Store Length (ft)"
-          name="storeLength"
+        <InputField 
+          label="Length (ft)" 
+          name="storeLength" 
           placeholder="e.g. 40"
-          value={formData.storeLength}
-          onChange={handleChange}
-          error={errors.storeLength}
+          value={formData.storeLength} 
+          onChange={handleChange} 
+          error={errors.storeLength} 
         />
-        <InputField
-          label="Store Width (ft)"
-          name="storeWidth"
+        <InputField 
+          label="Width (ft)" 
+          name="storeWidth" 
           placeholder="e.g. 20"
-          value={formData.storeWidth}
-          onChange={handleChange}
-          error={errors.storeWidth}
+          value={formData.storeWidth} 
+          onChange={handleChange} 
+          error={errors.storeWidth} 
         />
       </div>
-
-      {/* Store Condition */}
-      <InputField
-        label="Condition"
-        name="storeCondition"
-        placeholder="e.g. Good / Needs improvement"
-        value={formData.storeCondition}
-        onChange={handleChange}
-        error={errors.storeCondition}
-      />
-
-      {/* Market Return Condition */}
-      <InputField
-        label="Market Return Condition"
-        name="marketReturnCondition"
-        placeholder="e.g. Segregated and labelled"
-        value={formData.marketReturnCondition}
-        onChange={handleChange}
-        error={errors.marketReturnCondition}
-      />
-
-      {/* Office Facility — table & chair count side by side */}
+      <InputField label="Store Condition" name="storeCondition" placeholder="e.g. Good / Needs improvement" value={formData.storeCondition} onChange={handleChange} error={errors.storeCondition} />
+      <InputField label="Market Return Condition" name="marketReturnCondition" placeholder="e.g. Segregated and labelled" value={formData.marketReturnCondition} onChange={handleChange} error={errors.marketReturnCondition} />
       <div className="form-grid-2">
-        <InputField
-          label="Table Count"
-          name="tableCount"
+        <InputField 
+          label="Table Count" 
+          name="tableCount" 
           placeholder="e.g. 2"
-          value={formData.tableCount}
-          onChange={handleChange}
-          error={errors.tableCount}
+          value={formData.tableCount} 
+          onChange={handleChange} 
+          error={errors.tableCount} 
         />
-        <InputField
-          label="Chair Count"
-          name="chairCount"
+        <InputField 
+          label="Chair Count" 
+          name="chairCount" 
           placeholder="e.g. 6"
-          value={formData.chairCount}
-          onChange={handleChange}
-          error={errors.chairCount}
+          value={formData.chairCount} 
+          onChange={handleChange} 
+          error={errors.chairCount} 
         />
       </div>
-
-      {/* Store Comments — textarea */}
-      <TextAreaField
-        label="Comments"
-        name="storeComments"
-        placeholder="Enter any additional comments about the store"
-        value={formData.storeComments}
-        onChange={handleChange}
-      />
+      <TextAreaField label="Comments" name="storeComments" placeholder="Enter any additional comments about the store" value={formData.storeComments} onChange={handleChange} error={errors.storeComments} />
     </StepShell>
   );
 };

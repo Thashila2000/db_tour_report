@@ -34,9 +34,9 @@ const newRow = (): IssueRow => ({
 const SECURITY_OPTIONS = ["N/A", "Low", "Medium", "High"] as const;
 
 const securityStyle = (s: string): { bg: string; color: string } => {
-  if (s === "High")   return { bg: "rgba(220,38,38,0.10)",  color: "#dc2626" };
+  if (s === "High")   return { bg: "rgba(22,163,74,0.10)",  color: "#16a34a" };
   if (s === "Medium") return { bg: "rgba(234,88,12,0.10)",  color: "#ea580c" };
-  if (s === "Low")    return { bg: "rgba(22,163,74,0.10)",  color: "#16a34a" };
+  if (s === "Low")    return { bg: "rgba(220,38,38,0.10)",  color: "#dc2726" };
   return               { bg: "rgba(22,73,118,0.07)",        color: "#4a6d8c" };
 };
 
@@ -52,12 +52,12 @@ interface Props {
 // Updated cellInput with larger font and padding
 const cellInput: React.CSSProperties = {
   width:         "100%",
-  padding:       "10px 14px", // Increased padding
+  padding:       "10px 14px", 
   borderRadius:  "8px",
-  border:        "1.5px solid #4a6d8c",
+  border:        "2px solid #4a6d8c",
   background:    "rgba(22,73,118,0.04)",
   color:         "#0a1f33",
-  fontSize:      "14px", // Increased font size
+  fontSize:      "14px", 
   fontFamily:    "'DM Sans', sans-serif",
   outline:       "none",
   transition:    "all 0.2s ease",
@@ -107,9 +107,9 @@ const IssuesIdentifiedStep = ({ totalSteps, stepNumber, initialData, onNext, onB
             <tr style={{ background: "linear-gradient(135deg, #164976, #1e6aad)" }}>
               {["Issue Type", "Description", "Security", ""].map((h, i) => (
                 <th key={i} style={{
-                  padding: "16px 14px", // Increased padding
+                  padding: "16px 14px", 
                   textAlign: "left", 
-                  fontSize: "13px", // Increased font size
+                  fontSize: "13px", 
                   fontWeight: 700, 
                   color: "white", 
                   letterSpacing: "0.06em",
@@ -174,13 +174,13 @@ const IssuesIdentifiedStep = ({ totalSteps, stepNumber, initialData, onNext, onB
                       value={row.description}
                       placeholder="Enter description"
                       onChange={(e) => handleChange(row.id, "description", e.target.value)}
-                      style={{ ...cellInput, border: descErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }}
+                      style={{ ...cellInput, border: descErr ? "2px solid #f87171" : "2px solid #4a6d8c" }}
                       onFocus={(e) => {
-                        e.target.style.border    = "1.5px solid #164976";
+                        e.target.style.border    = "2px solid #164976";
                         e.target.style.boxShadow = "0 0 0 3px rgba(22,73,118,0.10)";
                       }}
                       onBlur={(e) => {
-                        e.target.style.border    = descErr ? "1.5px solid #f87171" : "1.5px solid #4a6d8c";
+                        e.target.style.border    = descErr ? "2px solid #f87171" : "2px solid #4a6d8c";
                         e.target.style.boxShadow = "none";
                       }}
                     />
@@ -195,10 +195,10 @@ const IssuesIdentifiedStep = ({ totalSteps, stepNumber, initialData, onNext, onB
                         width: "100%", 
                         padding: "10px 14px", 
                         borderRadius: "8px",
-                        border: "1.5px solid #4a6d8c",
+                        border: "2px solid #4a6d8c",
                         background: sc.bg, 
                         color: sc.color,
-                        fontSize: "14px", // Increased font size
+                        fontSize: "14px", 
                         fontWeight: 600,
                         fontFamily: "'DM Sans', sans-serif",
                         outline: "none", 
@@ -219,8 +219,8 @@ const IssuesIdentifiedStep = ({ totalSteps, stepNumber, initialData, onNext, onB
                         onClick={() => removeRow(row.id)}
                         title="Remove"
                         style={{
-                          width: "36px", // Increased size
-                          height: "36px", // Increased size
+                          width: "36px", 
+                          height: "36px", 
                           borderRadius: "10px",
                           border: "none", 
                           background: "rgba(220,38,38,0.08)",
@@ -262,12 +262,12 @@ const IssuesIdentifiedStep = ({ totalSteps, stepNumber, initialData, onNext, onB
           display: "flex", 
           alignItems: "center", 
           gap: "10px",
-          padding: "12px 24px", // Increased padding
+          padding: "12px 24px", 
           borderRadius: "12px",
           border: "1.5px dashed #4a6d8c", 
           background: "rgba(22,73,118,0.03)",
           color: "#164976", 
-          fontSize: "15px", // Increased font size
+          fontSize: "15px", 
           fontWeight: 600,
           fontFamily: "'DM Sans', sans-serif", 
           cursor: "pointer",
