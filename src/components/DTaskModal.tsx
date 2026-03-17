@@ -63,7 +63,7 @@ export default function ReportModal({
             ) : previewData ? (
               <div style={mScroll} className="m-scroll">
 
-        {/* 1. Visit Information */}
+     {/* 1. Visit Information */}
 <div style={mSection}>
   <div style={mSectionHead('#3b82f6')}>
     <div style={mSectionIcon('#3b82f6', '#dbeafe')}>
@@ -73,13 +73,14 @@ export default function ReportModal({
   </div>
   
   <div style={mInfoGrid}>
+    {/* Standard Text Information Mapping */}
     {[
-      ['DB Name',    previewData.visitDetails?.dbName],
-      ['Code',       previewData.visitDetails?.dbCode],
-      ['Visit Type', previewData.visitDetails?.visitType], // Added Visit Type here
-      ['Area',       previewData.visitDetails?.area],
-      ['Region',     previewData.visitDetails?.region],
-      ['Territory',  previewData.visitDetails?.territoryName],
+      ['DB Name',    previewData.visitDetails?.dbName],
+      ['Code',       previewData.visitDetails?.dbCode],
+      ['Visit Type', previewData.visitDetails?.visitType], 
+      ['Area',       previewData.visitDetails?.area],
+      ['Region',     previewData.visitDetails?.region],
+      ['Territory',  previewData.visitDetails?.territoryName],
       ['Visit Time', (() => {
         const raw = previewData.visitDetails?.visitTime; 
         if (!raw || typeof raw !== 'string') return '—';
@@ -105,6 +106,26 @@ export default function ReportModal({
         <span style={mChipValue}>{val || '—'}</span>
       </div>
     ))}
+
+    {/*SECTION TO ADD IMAGE */}
+    {previewData.visitDetails?.accompaniedByImage && (
+      <div key="image_proof" style={{ ...mInfoChip, flexBasis: '100%', flexDirection: 'column', alignItems: 'flex-start', border: '1px dashed #3b82f6' }}>
+        <span style={{ ...mChipLabel, marginBottom: '8px' }}>Proof of Visit (Photo)</span>
+        
+        {/* Render the Base64 string directly in an <img> tag */}
+        <img 
+          src={previewData.visitDetails.accompaniedByImage} 
+          alt="Visit proof photo" 
+          style={{ 
+            maxWidth: '200px', // Prevents it from being too big in the preview
+            maxHeight: '150px',
+            borderRadius: '8px', 
+            objectFit: 'cover', 
+            border: '1px solid #d4e2ef' 
+          }} 
+        />
+      </div>
+    )}
   </div>
 </div>
                {/* 2. DB Profile */}

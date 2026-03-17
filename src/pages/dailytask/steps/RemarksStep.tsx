@@ -47,6 +47,21 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
   const [isSuccess, setIsSuccess] = useState(false);
   const [summary, setSummary] = useState<string[]>([]);
 
+  const getActualLocalTime = () => {
+    const now = new Date();
+    const date = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0')
+    ].join('-');
+    const time = [
+      String(now.getHours()).padStart(2, '0'),
+      String(now.getMinutes()).padStart(2, '0'),
+      String(now.getSeconds()).padStart(2, '0')
+    ].join(':');
+    return `${date} ${time}`;
+  };
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!remarks.trim()) newErrors["remarks"] = "Remarks are required";
@@ -86,16 +101,16 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
         userRole: userRoleWithArea,
       });
 
-      // 1. Data Retrieval from Local Storage
+      // 1. Data Retrieval
       const dbProfile = JSON.parse(localStorage.getItem("dbProfile") || "{}");
       const salesPerformance = JSON.parse(localStorage.getItem("salesPerformance") || "{}");
       const stockStatus = JSON.parse(localStorage.getItem("stockStatus") || "{}");
       const issues = JSON.parse(localStorage.getItem("issuesIdentified") || "{}");
       const actionsData = JSON.parse(localStorage.getItem("actionsAgreed") || "{}"); 
       const followUp = JSON.parse(localStorage.getItem("followUp") || "{}");
-      
-      // ALIGNMENT: We label this as 'finalRemarks' to match the Preview Modal state key
       const remarksData = withThread({ remarks, preparedBy });
+
+      const actualLocalTime = getActualLocalTime();
 
       const staffObj = actionsData.staffActions || { asm: {}, ase: {}, csr: {}};
       const staffPayload = [
@@ -116,9 +131,15 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
           region: visitDetails?.region || "Unknown Region",
           area: visitDetails?.area || "Unknown Area",
           territoryName: visitDetails?.territoryName || "Unknown Territory",
-          visitTime: new Date().toISOString().replace('T', ' ').split('.')[0].replace(/-/g, '.')
+          createdAt: actualLocalTime, 
+          visitTime: actualLocalTime  
         },
-        visitDetails: { ...visitDetails, reportGroupId },
+        // ✅ Explicitly ensuring the Base64 image is included here
+        visitDetails: { 
+          ...visitDetails, 
+          reportGroupId,
+          accompaniedByImage: visitDetails?.accompaniedByImage || null 
+        },
         dbProfile: withThread({
           ...dbProfile,
           routeMapImage: dbProfile.routeMapImageBase64 || null,
@@ -145,7 +166,7 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
         },
         staffActions: staffPayload, 
         followUp: withThread(followUp),
-        finalRemarks: remarksData, // Renamed from 'remarks'
+        finalRemarks: remarksData,
       };
 
       const results = { successful: [] as string[], failed: [] as string[] };
@@ -174,8 +195,6 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
       }
 
       await postData("follow-up", payloads.followUp, "Follow Up");
-      
-      // CRITICAL FIX: Ensure endpoint matches your Backend controller mapping
       await postData("remarks", payloads.finalRemarks, "Remarks");
 
       // 4. Cleanup
@@ -203,7 +222,7 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
           </div>
           <h2 style={{ color: '#111827', fontSize: '22px', fontWeight: 800, marginBottom: '8px' }}>Report Synchronized!</h2>
           <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '32px' }}>All sections have been saved successfully.</p>
-          <div style={{ textAlign: 'left', background: '#f8fafc', padding: '16px', borderRadius: '16px', marginBottom: '32px', border: '1px solid #e2e8f0' }}>
+          <div style={{ textAlign: 'left', background: '#f8fafc', padding: '16px', borderRadius: '16px', marginBottom: '32px', border: '1px solid #e2e8f0', maxHeight: '180px', overflowY: 'auto' }}>
             {summary.map((item, idx) => (
               <div key={idx} style={{ fontSize: '13px', color: '#334155', padding: '4px 0', display: 'flex', alignItems: 'center' }}>
                 <div style={{ width: '6px', height: '6px', background: '#10b981', borderRadius: '50%', marginRight: '12px' }} /> {item}
@@ -236,7 +255,7 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
             setRemarks(e.target.value);
             if (errors["remarks"]) setErrors((prev) => ({ ...prev, remarks: "" }));
           }}
-          style={{ ...inputStyle, resize: "vertical", lineHeight: "1.6", minHeight: "140px", border: errors["remarks"] ? "2px solid #f87171" : "2px solid #4a6d8c" }}
+          style={{ ...inputStyle, resize: "vertical", lineHeight: "1.6", minHeight: "140px", border: errors["remarks"] ? "2px solid #f87171" : "2.5px solid #4a6d8c" }}
           disabled={submitting}
         />
         {errors["remarks"] && <p style={{ color: "#f87171", fontSize: "11px", marginTop: "4px" }}>{errors["remarks"]}</p>}
@@ -251,7 +270,7 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
             setPreparedBy(e.target.value);
             if (errors["preparedBy"]) setErrors((prev) => ({ ...prev, preparedBy: "" }));
           }}
-          style={{ ...inputStyle, border: errors["preparedBy"] ? "2px solid #f87171" : "2px solid #4a6d8c" }}
+          style={{ ...inputStyle, border: errors["preparedBy"] ? "2px solid #f87171" : "2.5px solid #4a6d8c" }}
           disabled={submitting}
         />
         {errors["preparedBy"] && <p style={{ color: "#f87171", fontSize: "11px", marginTop: "4px" }}>{errors["preparedBy"]}</p>}
