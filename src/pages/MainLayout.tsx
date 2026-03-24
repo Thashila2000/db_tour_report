@@ -11,7 +11,7 @@ const MainLayout = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="min-h-screen bg-white flex">
       
       {/* Sidebar */}
       <Sidebar isOpen={isOpen} closeSidebar={() => setIsOpen(false)} />

@@ -57,17 +57,30 @@ export default function ReportsPage() {
     }
   }, [selectedDate, reportType, user.name]);
 
-  // --- API Calls ---
+  // ✅ UPDATED: Fetching Logic to strictly match month-to-date defaults
   const fetchReports = async () => {
     setLoading(true);
     const params: any = { userName: user.name };
-    if (selectedDate) params.date = selectedDate; 
+
+    if (selectedDate) {
+      // User specifically picked one day
+      params.date = selectedDate; 
+    } else {
+      // DEFAULT: Current month range (1st of current month to Today)
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const dayToday = String(now.getDate()).padStart(2, '0');
+      
+      params.startDate = `${year}-${month}-01`;
+      params.endDate = `${year}-${month}-${dayToday}`;
+    }
 
     try {
       const endpoint = reportType === "DAILY_TASK" 
         ? "/api/reports/daily-tasks" 
         : "/api/reports/field-visits";
-        
+          
       const response = await axios.get(`${BASE_URL}${endpoint}`, { params });
       setReports(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
@@ -78,10 +91,6 @@ export default function ReportsPage() {
     }
   };
 
-  /**
-   * handlePreview now branches based on report type
-   * FIELD_VISIT uses the new /field-visit-details endpoint
-   */
   const handlePreview = async (reportGroupId: string, type: "DAILY_TASK" | "FIELD_VISIT") => {
     setModalLoading(true);
     setShowModal(true);
@@ -92,7 +101,6 @@ export default function ReportsPage() {
         const res = await axios.get(`${BASE_URL}/api/reports/field-visit-details/${reportGroupId}`);
         setPreviewData(res.data);
       } else {
-        // DAILY TASK Logic (Legacy consolidated endpoint)
         const summaryRes = await axios.get(`${BASE_URL}/api/reports/full-summary/${reportGroupId}`);
         let finalData = { ...summaryRes.data };
 
@@ -127,54 +135,51 @@ export default function ReportsPage() {
   };
 
   const getDateRangeLabel = () => {
-    if (!selectedDate) return "Last 30 Days";
-    return new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    if (!selectedDate) {
+      const now = new Date();
+      const monthName = now.toLocaleString('default', { month: 'long' });
+      return `${monthName} 1st - ${now.getDate()}${getOrdinal(now.getDate())}`;
+    }
+    return new Date(selectedDate).toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
   };
 
-  // Format time for display - extract actual time from visitTime string
-  // Cleaned up formatTime helper
-const formatTime = (visitTime: string) => {
-  if (!visitTime) return "N/A";
-  
-  try {
-    const parts = visitTime.split(' ');
-    // Handle "2026.03.13 10.19" -> replace '.' with ':' for the time part
-    const timePart = parts[1] ? parts[1].replace('.', ':') : ''; 
-    
-    if (timePart) return timePart;
+  const getOrdinal = (n: number) => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return s[(v - 20) % 10] || s[v] || s[0];
+  };
 
-    // Fallback to standard JS parsing if the split doesn't work
-    const date = new Date(visitTime);
-    return !isNaN(date.getTime()) 
-      ? date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) 
-      : visitTime;
-  } catch (e) {
-    return visitTime;
-  }
-};
+  const formatTime = (visitTime: string) => {
+    if (!visitTime) return "N/A";
+    try {
+      const parts = visitTime.split(' ');
+      const timePart = parts[1] ? parts[1].replace('.', ':') : ''; 
+      if (timePart) return timePart;
+      const date = new Date(visitTime);
+      return !isNaN(date.getTime()) 
+        ? date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) 
+        : visitTime;
+    } catch (e) { return visitTime; }
+  };
 
-  // Format date for display
   const formatDate = (visitTime: string) => {
     if (!visitTime) return "N/A";
-    
-    // Try to extract date from format like "2026.03.12 10:30"
     const dateMatch = visitTime.match(/(\d{4})[.-](\d{2})[.-](\d{2})/);
     if (dateMatch) {
       const [, year, month, day] = dateMatch;
       return `${year}.${month}.${day}`;
     }
-    
-    // If it's a date string, try to parse and format
     try {
       const date = new Date(visitTime);
       if (!isNaN(date.getTime())) {
         return date.toLocaleDateString('en-CA').replace(/-/g, '.');
       }
-    } catch (e) {
-      console.error("Date parsing error:", e);
-    }
-    
-    return visitTime.split(' ')[0] || visitTime; // Return date part or full string
+    } catch (e) {}
+    return visitTime.split(' ')[0] || visitTime;
   };
 
   return (
@@ -238,7 +243,6 @@ const formatTime = (visitTime: string) => {
                 <button 
                   onClick={(e) => {
                     e.preventDefault();
-                    e.stopPropagation();
                     setSelectedDate("");
                   }} 
                   style={clearButton}
@@ -322,8 +326,6 @@ const formatTime = (visitTime: string) => {
           ) : (
             reports.map((report) => {
               const isFieldVisit = reportType === "FIELD_VISIT";
-              
-              // For Daily Task
               const displayName = isFieldVisit 
                 ? (report.territoryName || report.dbName || "General Report")
                 : (report.territoryName || "Unassigned Territory");
@@ -366,7 +368,6 @@ const formatTime = (visitTime: string) => {
                       >
                         <FiEye size={16} /> <span>View</span>
                       </button>
-                      {/* Download button only for Daily Task reports */}
                       {!isFieldVisit && (
                         <button style={downloadButton} onClick={() => handleDownload(report.reportGroupId)}>
                           <FiDownload size={16} /> <span>PDF</span>
@@ -382,19 +383,19 @@ const formatTime = (visitTime: string) => {
       </div>
 
       {/* ==================== CONDITIONAL MODALS ==================== */}
-     {/* Find this section in ReportsPage.tsx */}
-<ReportModal
-     showModal={showModal}
-     modalLoading={modalLoading}
-     previewData={previewData}
-     onClose={() => setShowModal(false)}
-     formatTime={formatTime} 
-     formatDate={formatDate}
-     onDownload={handleDownload} 
-   />
-      
+      {activeModalType === "DAILY_TASK" && (
+        <ReportModal
+          showModal={showModal}
+          modalLoading={modalLoading}
+          previewData={previewData}
+          onClose={handleCloseModal}
+          formatTime={formatTime} 
+          formatDate={formatDate}
+          onDownload={handleDownload} 
+        />
+      )}
 
-      {showModal && activeModalType === "FIELD_VISIT" && (
+      {activeModalType === "FIELD_VISIT" && (
         <FieldVisitReport
           showModal={showModal}
           modalLoading={modalLoading}
@@ -411,416 +412,57 @@ const formatTime = (visitTime: string) => {
   );
 }
 
-// ==================== STYLES ====================
-const pageWrapper: React.CSSProperties = { 
-  minHeight: '100vh', 
-  background: '#f8fafc', 
-  padding: '24px', 
-  fontFamily: "'Inter', sans-serif" 
-};
-
-const topHeader: React.CSSProperties = { 
-  background: 'white', 
-  borderRadius: '16px', 
-  padding: '20px 24px', 
-  marginBottom: '20px', 
-  display: 'flex', 
-  justifyContent: 'space-between', 
-  alignItems: 'center', 
-  boxShadow: '0 1px 3px rgba(0,0,0,0.1)' 
-};
-
-const headerLeft: React.CSSProperties = { 
-  display: 'flex', 
-  alignItems: 'center', 
-  gap: '16px' 
-};
-
-const logoBox: React.CSSProperties = { 
-  width: '48px', 
-  height: '48px', 
-  background: '#164976', 
-  borderRadius: '12px', 
-  display: 'flex', 
-  alignItems: 'center', 
-  justifyContent: 'center', 
-  color: 'white' 
-};
-
-const headerText: React.CSSProperties = { 
-  flex: 1 
-};
-
-const mainTitle: React.CSSProperties = { 
-  margin: 0, 
-  fontSize: '22px', 
-  fontWeight: 800, 
-  color: '#0f172a' 
-};
-
-const mainSubtitle: React.CSSProperties = { 
-  margin: 0, 
-  fontSize: '13px', 
-  color: '#64748b' 
-};
-
-const userBadge: React.CSSProperties = { 
-  display: 'flex', 
-  alignItems: 'center', 
-  gap: '10px', 
-  background: '#f1f5f9', 
-  padding: '8px 14px', 
-  borderRadius: '12px' 
-};
-
-const userIcon: React.CSSProperties = { 
-  color: '#164976' 
-};
-
-const userInfo: React.CSSProperties = { 
-  textAlign: 'right' 
-};
-
-const userNameText: React.CSSProperties = { 
-  fontSize: '13px', 
-  fontWeight: 700 
-};
-
-const userRoleText: React.CSSProperties = { 
-  fontSize: '11px', 
-  color: '#64748b' 
-};
-
-const controlsPanel: React.CSSProperties = { 
-  background: 'white', 
-  borderRadius: '16px', 
-  padding: '16px 24px', 
-  marginBottom: '20px', 
-  display: 'flex', 
-  justifyContent: 'space-between', 
-  alignItems: 'flex-end' 
-};
-
-const controlsLeft: React.CSSProperties = { 
-  display: 'flex', 
-  gap: '16px' 
-};
-
-const controlsRight: React.CSSProperties = { 
-  display: 'flex' 
-};
-
-const filterGroup: React.CSSProperties = { 
-  display: 'flex', 
-  flexDirection: 'column', 
-  gap: '6px', 
-  width: '220px' 
-};
-
-const filterLabel: React.CSSProperties = { 
-  display: 'flex', 
-  alignItems: 'center', 
-  gap: '6px', 
-  fontSize: '11px', 
-  fontWeight: 700, 
-  color: '#94a3b8', 
-  textTransform: 'uppercase' 
-};
-
-const selectContainer: React.CSSProperties = { 
-  position: 'relative' 
-};
-
-const selectField: React.CSSProperties = { 
-  width: '100%', 
-  padding: '10px 12px', 
-  borderRadius: '8px', 
-  border: '1px solid #e2e8f0', 
-  appearance: 'none', 
-  fontWeight: 600, 
-  fontSize: '14px', 
-  cursor: 'pointer',
-  backgroundColor: 'white'
-};
-
-const selectArrow: React.CSSProperties = { 
-  position: 'absolute', 
-  right: '10px', 
-  top: '50%', 
-  transform: 'translateY(-50%)', 
-  pointerEvents: 'none', 
-  color: '#64748b' 
-};
-
-const dateContainer: React.CSSProperties = { 
-  position: 'relative', 
-  display: 'flex', 
-  alignItems: 'center' 
-};
-
-const dateField: React.CSSProperties = { 
-  width: '100%', 
-  padding: '10px 12px', 
-  paddingRight: '36px',
-  borderRadius: '8px', 
-  border: '1px solid #e2e8f0', 
-  fontWeight: 600, 
-  fontSize: '14px',
-  backgroundColor: 'white'
-};
-
-const clearButton: React.CSSProperties = { 
-  position: 'absolute', 
-  right: '8px',
-  top: '50%',
-  transform: 'translateY(-50%)',
-  background: '#fee2e2', 
-  border: 'none', 
-  color: '#ef4444', 
-  cursor: 'pointer',
-  width: '24px',
-  height: '24px',
-  borderRadius: '6px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  transition: 'all 0.2s',
-  padding: 0
-};
-
-const refreshButton: React.CSSProperties = { 
-  display: 'flex', 
-  alignItems: 'center', 
-  gap: '8px', 
-  padding: '10px 20px', 
-  background: '#164976', 
-  color: 'white', 
-  border: 'none', 
-  borderRadius: '8px', 
-  fontWeight: 700, 
-  cursor: 'pointer',
-  transition: 'all 0.2s'
-};
-
-const statsContainer: React.CSSProperties = { 
-  display: 'grid', 
-  gridTemplateColumns: 'repeat(3, 1fr)', 
-  gap: '16px', 
-  marginBottom: '20px' 
-};
-
-const statCard: React.CSSProperties = { 
-  background: 'white', 
-  borderRadius: '16px', 
-  padding: '16px', 
-  display: 'flex', 
-  alignItems: 'center', 
-  gap: '12px', 
-  border: '1px solid #e2e8f0' 
-};
-
-const statIconWrapper = (color: string): React.CSSProperties => ({ 
-  width: '40px', 
-  height: '40px', 
-  background: `${color}15`, 
-  borderRadius: '10px', 
-  display: 'flex', 
-  alignItems: 'center', 
-  justifyContent: 'center' 
-});
-
-const statContent: React.CSSProperties = { 
-  display: 'flex', 
-  flexDirection: 'column' 
-};
-
-const statValue: React.CSSProperties = { 
-  fontSize: '16px', 
-  fontWeight: 800 
-};
-
-const statLabel: React.CSSProperties = { 
-  fontSize: '11px', 
-  color: '#64748b' 
-};
-
-const mainContent: React.CSSProperties = { 
-  background: 'white', 
-  borderRadius: '16px', 
-  padding: '24px', 
-  minHeight: '400px' 
-};
-
-const contentHeader: React.CSSProperties = { 
-  marginBottom: '20px' 
-};
-
-const contentTitle: React.CSSProperties = { 
-  fontSize: '18px', 
-  fontWeight: 800, 
-  margin: 0, 
-  color: '#1e293b' 
-};
-
-const listContainer: React.CSSProperties = { 
-  display: 'flex', 
-  flexDirection: 'column', 
-  gap: '12px' 
-};
-
-const reportCard: React.CSSProperties = { 
-  background: 'white', 
-  borderRadius: '12px', 
-  padding: '16px', 
-  border: '1px solid #e2e8f0', 
-  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-  cursor: 'pointer'
-};
-
-const cardContent: React.CSSProperties = { 
-  display: 'flex', 
-  justifyContent: 'space-between', 
-  alignItems: 'center' 
-};
-
-const cardLeft: React.CSSProperties = { 
-  display: 'flex', 
-  alignItems: 'center', 
-  gap: '12px',
-  flex: 1
-};
-
-const iconCircle: React.CSSProperties = { 
-  width: '44px', 
-  height: '44px', 
-  background: '#f8fafc', 
-  borderRadius: '12px', 
-  display: 'flex', 
-  alignItems: 'center', 
-  justifyContent: 'center',
-  flexShrink: 0
-};
-
-const cardInfo: React.CSSProperties = { 
-  display: 'flex', 
-  flexDirection: 'column', 
-  gap: '4px',
-  flex: 1
-};
-
-const territoryName: React.CSSProperties = { 
-  margin: 0, 
-  fontSize: '15px', 
-  fontWeight: 700, 
-  color: '#0f172a' 
-};
-
-const cardMetaRow: React.CSSProperties = { 
-  display: 'flex', 
-  gap: '8px', 
-  alignItems: 'center',
-  flexWrap: 'wrap'
-};
-
-const dateTime: React.CSSProperties = { 
-  fontSize: '12px', 
-  color: '#64748b', 
-  display: 'flex', 
-  alignItems: 'center', 
-  gap: '4px',
-  fontWeight: 600
-};
-
-const locationTag: React.CSSProperties = { 
-  fontSize: '10px', 
-  background: '#e2e8f0', 
-  padding: '2px 8px', 
-  borderRadius: '6px', 
-  color: '#475569', 
-  fontWeight: 700 
-};
-
-const userTag: React.CSSProperties = { 
-  fontSize: '10px', 
-  background: '#f1f5f9', 
-  padding: '2px 8px', 
-  borderRadius: '6px', 
-  color: '#164976', 
-  fontWeight: 700 
-};
-
-const actionButtonsGroup: React.CSSProperties = { 
-  display: 'flex', 
-  gap: '8px',
-  flexShrink: 0
-};
-
-const previewButton: React.CSSProperties = { 
-  display: 'flex', 
-  alignItems: 'center', 
-  gap: '6px', 
-  padding: '8px 16px', 
-  borderRadius: '8px', 
-  border: '1px solid #e2e8f0', 
-  background: 'white', 
-  fontWeight: 700, 
-  cursor: 'pointer', 
-  fontSize: '13px',
-  transition: 'all 0.2s',
-  color: '#164976'
-};
-
-const downloadButton: React.CSSProperties = { 
-  display: 'flex', 
-  alignItems: 'center', 
-  gap: '6px', 
-  padding: '8px 16px', 
-  borderRadius: '8px', 
-  background: '#164976', 
-  color: 'white', 
-  border: 'none', 
-  fontWeight: 700, 
-  cursor: 'pointer', 
-  fontSize: '13px',
-  transition: 'all 0.2s'
-};
-
-const loadingState: React.CSSProperties = { 
-  display: 'flex', 
-  flexDirection: 'column', 
-  alignItems: 'center', 
-  justifyContent: 'center', 
-  padding: '60px' 
-};
-
-const spinner: React.CSSProperties = { 
-  width: '36px', 
-  height: '36px', 
-  border: '4px solid #f1f5f9', 
-  borderTop: '4px solid #164976', 
-  borderRadius: '50%', 
-  animation: 'spin 1s linear infinite' 
-};
-
-const loadingText: React.CSSProperties = { 
-  marginTop: '16px', 
-  fontSize: '14px', 
-  color: '#64748b' 
-};
-
-const emptyState: React.CSSProperties = { 
-  textAlign: 'center', 
-  padding: '60px 20px' 
-};
-
-const emptyTitle: React.CSSProperties = { 
-  margin: '16px 0 8px 0', 
-  fontSize: '18px', 
-  fontWeight: 700, 
-  color: '#475569' 
-};
-
-const emptyText: React.CSSProperties = { 
-  fontSize: '14px', 
-  color: '#94a3b8' 
-};
+// ... (All style objects from your original code are preserved below)
+const pageWrapper: React.CSSProperties = { minHeight: '100vh', background: '#f8fafc', padding: '24px', fontFamily: "'Inter', sans-serif" };
+const topHeader: React.CSSProperties = { background: 'white', borderRadius: '16px', padding: '20px 24px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' };
+const headerLeft: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '16px' };
+const logoBox: React.CSSProperties = { width: '48px', height: '48px', background: '#164976', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' };
+const headerText: React.CSSProperties = { flex: 1 };
+const mainTitle: React.CSSProperties = { margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a' };
+const mainSubtitle: React.CSSProperties = { margin: 0, fontSize: '13px', color: '#64748b' };
+const userBadge: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '10px', background: '#f1f5f9', padding: '8px 14px', borderRadius: '12px' };
+const userIcon: React.CSSProperties = { color: '#164976' };
+const userInfo: React.CSSProperties = { textAlign: 'right' };
+const userNameText: React.CSSProperties = { fontSize: '13px', fontWeight: 700 };
+const userRoleText: React.CSSProperties = { fontSize: '11px', color: '#64748b' };
+const controlsPanel: React.CSSProperties = { background: 'white', borderRadius: '16px', padding: '16px 24px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' };
+const controlsLeft: React.CSSProperties = { display: 'flex', gap: '16px' };
+const controlsRight: React.CSSProperties = { display: 'flex' };
+const filterGroup: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '6px', width: '220px' };
+const filterLabel: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' };
+const selectContainer: React.CSSProperties = { position: 'relative' };
+const selectField: React.CSSProperties = { width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', appearance: 'none', fontWeight: 600, fontSize: '14px', cursor: 'pointer', backgroundColor: 'white' };
+const selectArrow: React.CSSProperties = { position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#64748b' };
+const dateContainer: React.CSSProperties = { position: 'relative', display: 'flex', alignItems: 'center' };
+const dateField: React.CSSProperties = { width: '100%', padding: '10px 12px', paddingRight: '36px', borderRadius: '8px', border: '1px solid #e2e8f0', fontWeight: 600, fontSize: '14px', backgroundColor: 'white' };
+const clearButton: React.CSSProperties = { position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: '#fee2e2', border: 'none', color: '#ef4444', cursor: 'pointer', width: '24px', height: '24px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s', padding: 0 };
+const refreshButton: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#164976', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' };
+const statsContainer: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '20px' };
+const statCard: React.CSSProperties = { background: 'white', borderRadius: '16px', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid #e2e8f0' };
+const statIconWrapper = (color: string): React.CSSProperties => ({ width: '40px', height: '40px', background: `${color}15`, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' });
+const statContent: React.CSSProperties = { display: 'flex', flexDirection: 'column' };
+const statValue: React.CSSProperties = { fontSize: '16px', fontWeight: 800 };
+const statLabel: React.CSSProperties = { fontSize: '11px', color: '#64748b' };
+const mainContent: React.CSSProperties = { background: 'white', borderRadius: '16px', padding: '24px', minHeight: '400px' };
+const contentHeader: React.CSSProperties = { marginBottom: '20px' };
+const contentTitle: React.CSSProperties = { fontSize: '18px', fontWeight: 800, margin: 0, color: '#1e293b' };
+const listContainer: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '12px' };
+const reportCard: React.CSSProperties = { background: 'white', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', cursor: 'pointer' };
+const cardContent: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
+const cardLeft: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '12px', flex: 1 };
+const iconCircle: React.CSSProperties = { width: '44px', height: '44px', background: '#f8fafc', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 };
+const cardInfo: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 };
+const territoryName: React.CSSProperties = { margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' };
+const cardMetaRow: React.CSSProperties = { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' };
+const dateTime: React.CSSProperties = { fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 };
+const locationTag: React.CSSProperties = { fontSize: '10px', background: '#e2e8f0', padding: '2px 8px', borderRadius: '6px', color: '#475569', fontWeight: 700 };
+const userTag: React.CSSProperties = { fontSize: '10px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px', color: '#164976', fontWeight: 700 };
+const actionButtonsGroup: React.CSSProperties = { display: 'flex', gap: '8px', flexShrink: 0 };
+const previewButton: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', fontWeight: 700, cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s', color: '#164976' };
+const downloadButton: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', background: '#164976', color: 'white', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s' };
+const loadingState: React.CSSProperties = { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px' };
+const spinner: React.CSSProperties = { width: '36px', height: '36px', border: '4px solid #f1f5f9', borderTop: '4px solid #164976', borderRadius: '50%', animation: 'spin 1s linear infinite' };
+const loadingText: React.CSSProperties = { marginTop: '16px', fontSize: '14px', color: '#64748b' };
+const emptyState: React.CSSProperties = { textAlign: 'center', padding: '60px 20px' };
+const emptyTitle: React.CSSProperties = { margin: '16px 0 8px 0', fontSize: '18px', fontWeight: 700, color: '#475569' };
+const emptyText: React.CSSProperties = { fontSize: '14px', color: '#94a3b8' };

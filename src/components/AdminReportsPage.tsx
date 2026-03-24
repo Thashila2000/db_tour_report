@@ -3,7 +3,7 @@ import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import { 
   FiCalendar, FiDownload, FiFileText, FiLayers, FiChevronDown, 
-  FiMapPin, FiRefreshCw, FiX, FiActivity, FiEye, FiArrowLeft, FiAlertCircle
+  FiRefreshCw, FiX, FiActivity, FiEye, FiArrowLeft, FiAlertCircle, FiClock
 } from "react-icons/fi";
 
 // Import your existing modals
@@ -14,8 +14,6 @@ export default function AdminReportsPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  
-  
   const queryParams = new URLSearchParams(location.search);
   const regionFromUrl = queryParams.get("region") || "";
 
@@ -32,6 +30,10 @@ export default function AdminReportsPage() {
 
   const BASE_URL = "http://localhost:8080";
   const today = new Date().toISOString().split("T")[0];
+  
+  const now = new Date();
+  const currentMonthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const currentYearMonth = now.toISOString().slice(0, 7); 
 
   const fetchReports = async () => {
     if (!regionFromUrl) return;
@@ -44,7 +46,8 @@ export default function AdminReportsPage() {
       const response = await axios.get(`${BASE_URL}${endpoint}`, { 
         params: { 
           region: regionFromUrl,
-          date: selectedDate ? selectedDate.replace(/-/g, ".") : null 
+          date: selectedDate || null,
+          month: !selectedDate ? currentYearMonth : null 
         } 
       });
       
@@ -61,17 +64,14 @@ export default function AdminReportsPage() {
     fetchReports();
   }, [selectedDate, reportType, regionFromUrl]);
 
-
-  // Helper functions to satisfy ReportModalProps
   const formatDate = (dateString: string) => {
     if (!dateString) return "N/A";
-    const date = new Date(dateString.replace(/\./g, '-')); // Handle potential dot format
+    const date = new Date(dateString.replace(/\./g, '-'));
     return isNaN(date.getTime()) ? dateString : date.toLocaleDateString();
   };
 
   const formatTime = (timeString: string) => {
     if (!timeString) return "N/A";
-    // Check if it already contains a time or needs parsing
     return timeString.includes(':') ? timeString : "N/A"; 
   };
 
@@ -79,38 +79,23 @@ export default function AdminReportsPage() {
     setModalLoading(true);
     setShowModal(true);
     setActiveModalType(type);
-    setPreviewData(null); // Reset preview data to avoid showing old content
-    
+    setPreviewData(null);
     try {
       if (type === "FIELD_VISIT") {
         const res = await axios.get(`${BASE_URL}/api/reports/field-visit-details/${reportGroupId}`);
         setPreviewData(res.data);
       } else {
-        // 1. Get the main summary (Mandatory)
         const summaryRes = await axios.get(`${BASE_URL}/api/reports/full-summary/${reportGroupId}`);
         let finalData = { ...summaryRes.data };
-
-        // 2. Fetch the "missing" pieces (Optional/Resilient to 500 errors)
         const [remarksRes, staffRes] = await Promise.allSettled([
           axios.get(`${BASE_URL}/api/remarks/${reportGroupId}`),
           axios.get(`${BASE_URL}/api/action-staff/bulk/${reportGroupId}`)
         ]);
-
-        if (remarksRes.status === 'fulfilled') {
-          const rData = remarksRes.value.data;
-          finalData.finalRemarks = Array.isArray(rData) ? rData[0] : rData;
-        }
-
-        if (staffRes.status === 'fulfilled') {
-          finalData.staffActions = staffRes.value.data;
-        }
-        
+        if (remarksRes.status === 'fulfilled') finalData.finalRemarks = Array.isArray(remarksRes.value.data) ? remarksRes.value.data[0] : remarksRes.value.data;
+        if (staffRes.status === 'fulfilled') finalData.staffActions = staffRes.value.data;
         setPreviewData(finalData);
       }
     } catch (err) {
-      console.error("Admin Preview Error (likely 500 in backend):", err);
-      // Even if backend fails, we stop the loader so user isn't stuck
-      alert("Error loading report details. Please check server logs.");
       setShowModal(false);
     } finally {
       setModalLoading(false);
@@ -124,306 +109,272 @@ export default function AdminReportsPage() {
   return (
     <div className="admin-page-container" style={pageWrapper}>
       
-      <div className="top-header" style={topHeader}>
-        <div style={headerLeft}>
-          <button onClick={() => navigate(-1)} style={backBtn}>
+      <div className="admin-header" style={headerGradient}>
+        <div className="header-left" style={headerLeftContent}>
+          <button onClick={() => navigate(-1)} style={backBtnGradient}>
             <FiArrowLeft size={18} />
           </button>
-          <div style={logoBox}>
-            <FiFileText size={24} strokeWidth={2.5} />
+          <div style={logoIconBox}>
+            <FiFileText size={22} />
           </div>
-          <div style={headerText}>
-            <h1 style={mainTitle}>{regionFromUrl}</h1>
-            <p style={mainSubtitle}>Regional Overview</p>
-          </div>
-        </div>
-        <div className="admin-badge-hide" style={adminBadge}>
-          <div style={adminIcon}><FiActivity size={20} /></div>
-          <div style={adminInfo}>
-             <div style={adminNameText}>Administrator</div>
-             <div style={adminRoleText}>{regionFromUrl} Access</div>
+          <div>
+            <h1 className="header-title" style={titleWhite}>{regionFromUrl}</h1>
+            <p className="header-subtitle" style={subtitleWhite}>
+              Regional Feed <FiActivity size={12} style={{margin: '0 6px'}} /> {reportType.replace('_', ' ')}
+            </p>
           </div>
         </div>
+        
+      <div className="header-right header-right-mobile-fix" style={headerRightContent}>
+  <div style={pillBadge}>
+    <span style={pillLabel}>RECORDS</span>
+    <span style={pillValue}>{reports.length}</span>
+  </div>
+  <button onClick={fetchReports} className="refresh-btn" style={refreshBtnWhite} disabled={loading}>
+    <FiRefreshCw size={16} className={loading ? "spin" : ""} />
+    <span>Refresh</span>
+  </button>
+</div>
       </div>
 
-      <div className="controls-panel" style={controlsPanel}>
-        <div className="controls-stack" style={controlsLeft}>
-          <div style={filterGroup}>
-            <label style={filterLabel}><FiLayers size={14} /> <span>Report Type</span></label>
-            <div style={selectContainer}>
-              <select value={reportType} onChange={(e) => setReportType(e.target.value)} style={selectField}>
-                <option value="FIELD_VISIT">Field Visit</option>
-                <option value="DAILY_TASK">Daily Task</option>
+      <div className="filter-bar" style={filterBar}>
+        <div className="filter-group" style={filterGroup}>
+          <div style={inputContainer}>
+            <FiLayers size={14} color="#164976" />
+            <div style={selectWrapper}>
+              <select value={reportType} onChange={(e) => setReportType(e.target.value)} style={selectReset}>
+                <option value="FIELD_VISIT">Field Visit Reports</option>
+                <option value="DAILY_TASK">Daily Task Reports</option>
               </select>
-              <FiChevronDown style={selectArrow} size={16} />
+              <FiChevronDown size={14} color="#94a3b8" style={chevronPosition} />
             </div>
           </div>
 
-          <div style={filterGroup}>
-            <label style={filterLabel}><FiCalendar size={14} /> <span>Date Filter</span></label>
-            <div style={dateContainer}>
-              <input 
-                type="date" 
-                value={selectedDate} 
-                max={today}
-                onChange={(e) => setSelectedDate(e.target.value)} 
-                style={dateField} 
-              />
-              {selectedDate && (
-                <button onClick={() => setSelectedDate("")} style={clearButton}>
-                  <FiX size={14} />
-                </button>
-              )}
-            </div>
+          <div className="filter-divider" style={dividerVertical} />
+
+          <div style={inputContainer}>
+            <FiCalendar size={14} color="#164976" />
+            <input 
+              type="date" 
+              value={selectedDate} 
+              max={today}
+              onChange={(e) => setSelectedDate(e.target.value)} 
+              style={dateReset} 
+            />
+            {selectedDate && (
+              <button onClick={() => setSelectedDate("")} style={clearBtnMinimal}><FiX size={14} /></button>
+            )}
           </div>
         </div>
 
-        <div className="controls-right">
-          <button onClick={fetchReports} style={refreshButton} disabled={loading}>
-            <FiRefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            <span>Refresh</span>
-          </button>
+        <div className="time-indicator" style={timeIndicator}>
+           <FiClock size={14} />
+           <span>{selectedDate ? formatDate(selectedDate) : `Month: ${currentMonthName}`}</span>
         </div>
       </div>
 
-      <div style={mainContent}>
-        <div style={listContainer}>
-          {loading ? (
-            <div style={loadingState}><div style={spinner} /><p style={loadingText}>Loading data...</p></div>
-          ) : reports.length === 0 ? (
-            <div style={emptyState}>
-              <FiAlertCircle size={48} color="#cbd5e1" />
-              <h3 style={emptyTitle}>No Records Found</h3>
-              <p style={emptyText}>No reports for {regionFromUrl} on this date.</p>
+      <div style={listArea}>
+        {loading ? (
+          <div style={loadingCenter}><div className="loader-modern" /><p>Updating feed...</p></div>
+        ) : reports.length === 0 ? (
+          <div style={emptyContainer}>
+            <FiAlertCircle size={48} color="#e2e8f0" />
+            <h3>No Records Found</h3>
+            <p>No reports found for this period.</p>
+          </div>
+        ) : (
+          <div style={listStack}>
+            <div className="table-header" style={tableHeaderLabels}>
+              <div style={{width: '8px', marginRight: '20px'}} />
+              <div style={{flex: 2}}>TERRITORY</div>
+              
+             
             </div>
-          ) : (
-            reports.map((report) => (
-              <div 
-                key={report.reportGroupId} 
-                className="report-card"
-                style={{
-                    ...reportCard,
-                    borderColor: hoveredCard === report.reportGroupId ? '#164976' : '#e2e8f0',
-                    transform: hoveredCard === report.reportGroupId ? 'translateX(5px)' : 'none'
-                }}
-                onMouseEnter={() => setHoveredCard(report.reportGroupId)}
-                onMouseLeave={() => setHoveredCard(null)}
-              >
-                <div className="card-inner" style={cardContent}>
-                  <div style={cardLeft}>
-                    <div className="card-icon-hide" style={iconCircle}>
-                      {reportType === "FIELD_VISIT" ? <FiMapPin size={18} color="#164976" /> : <FiActivity size={18} color="#164976" />}
-                    </div>
-                    <div style={cardInfo}>
-                      <h3 style={territoryName}>{report.territoryName || "General Territory"}</h3>
-                      <div style={cardMetaRow}>
-                        <span style={userTag}>
-                          <FiCalendar size={10} style={{marginRight: '4px'}}/>
-                          {report.visitTime ? report.visitTime.split(' ')[0] : 'N/A'}
-                        </span>
-                        <span style={{
-                          ...locationTag,
-                          background: (reportType === "DAILY_TASK" && !report.dbName) ? "#fee2e2" : "#e2e8f0",
-                          color: (reportType === "DAILY_TASK" && !report.dbName) ? "#ef4444" : "#475569"
-                        }}>
-                          {reportType === "DAILY_TASK" 
-                            ? (report.dbName || "No Distributor") 
-                            : (report.area || report.region || "General Area")}
-                        </span>
-                      </div>
-                    </div>
+
+            {reports.map((report) => {
+              const themeColor = reportType === 'FIELD_VISIT' ? '#164976' : '#1e6aad';
+              const isHovered = hoveredCard === report.reportGroupId;
+
+              return (
+                <div 
+                  key={report.reportGroupId} 
+                  className="list-row"
+                  style={{
+                    ...listRow,
+                    backgroundColor: isHovered ? '#f0f7ff' : 'white',
+                    borderColor: isHovered ? '#164976' : '#f1f5f9',
+                    transform: isHovered ? 'translateX(6px)' : 'none'
+                  }}
+                  onMouseEnter={() => setHoveredCard(report.reportGroupId)}
+                  onMouseLeave={() => setHoveredCard(null)}
+                >
+                  <div style={statusDot(themeColor)} className="mobile-hide-dot" />
+                  
+                  <div className="row-territory" style={{ flex: 2 }}>
+                    <div style={rowMainTitle} className="mobile-title-style">{report.territoryName || "Unassigned"}</div>
                   </div>
-                  <div style={actionButtonsGroup}>
-                    <button 
-                      style={previewButton} 
-                      onClick={() => handlePreview(report.reportGroupId, reportType as any)}
-                    >
-                      <FiEye size={16} /> <span>View</span>
-                    </button>
-                    {reportType === "DAILY_TASK" && (
-                      <button 
-                        style={downloadButton} 
-                        onClick={() => handleDownload(report.reportGroupId)}
-                      >
-                        <FiDownload size={16} />
+                  
+                  <div className="mobile-meta-row">
+                    <div className="row-date" style={rowDate}>
+                      {report.visitTime ? report.visitTime.split(' ')[0] : 'N/A'}
+                    </div>
+                    
+                    <div className="row-user" style={{ flex: 1 }}>
+                      <span style={userLabel} className="mobile-badge-style">
+                        {reportType === "DAILY_TASK" ? (report.dbName || "Direct") : (report.userName || "Staff")}
+                      </span>
+                    </div>
+                    
+                    <div className="row-actions" style={rowActionGroup}>
+                      <button style={btnView} onClick={() => handlePreview(report.reportGroupId, reportType as any)} className="mobile-action-btn">
+                        <FiEye size={14} /> <span className="btn-text">View</span>
                       </button>
-                    )}
+                      {reportType === "DAILY_TASK" && (
+                        <button style={btnDownload} onClick={() => handleDownload(report.reportGroupId)} className="mobile-action-btn">
+                          <FiDownload size={14} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {showModal && activeModalType === "DAILY_TASK" && (
-        <ReportModal 
-          showModal={showModal} 
-          modalLoading={modalLoading} 
-          previewData={previewData} 
-          onClose={() => setShowModal(false)} 
-          onDownload={handleDownload} 
-          formatTime={formatTime}
-          formatDate={formatDate}
-        />
+        <ReportModal showModal={showModal} modalLoading={modalLoading} previewData={previewData} onClose={() => setShowModal(false)} onDownload={handleDownload} formatTime={formatTime} formatDate={formatDate} />
       )}
       {showModal && activeModalType === "FIELD_VISIT" && (
-        <FieldVisitReport 
-          showModal={showModal} 
-          modalLoading={modalLoading} 
-          previewData={previewData} 
-          onClose={() => setShowModal(false)} 
-        />
+        <FieldVisitReport showModal={showModal} modalLoading={modalLoading} previewData={previewData} onClose={() => setShowModal(false)} />
       )}
 
       <style>{`
-        /* @import MUST be at the very top */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
-
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        
+        .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .loader-modern { width: 32px; height: 32px; border: 3px solid #f1f5f9; border-top: 3px solid #164976; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        * { font-family: 'Plus Jakarta Sans', sans-serif !important; }
+        
+        /* Desktop Default: Ensure the meta-row acts as a transparent container */
+        .mobile-meta-row {
+          display: contents; 
+        }
+
+        /* ========== RESPONSIVE DESIGN ========== */
+        
+        @media (max-width: 1024px) {
+          .admin-header { flex-direction: column !important; height: auto !important; padding: 25px 20px !important; align-items: flex-start !important; gap: 20px; }
+          .header-right { width: 100%; justify-content: space-between; }
+          .filter-bar { flex-direction: column !important; height: auto !important; padding: 20px !important; gap: 15px; margin: -20px 20px 30px 20px !important; }
+          .filter-group { flex-direction: column !important; width: 100%; gap: 15px !important; }
+          .filter-divider { display: none !important; }
+          .table-header { display: none !important; }
+          .header-right-mobile-fix {
+           margin-bottom: 20px; /* Adjust this value as needed */
+           width: 100%;
+           justify-content: space-between;
+      }
+        }
 
         @media (max-width: 768px) {
-          .admin-page-container { padding: 12px !important; }
-          .controls-panel { flex-direction: column !important; align-items: stretch !important; gap: 16px !important; }
-          .controls-stack { flex-direction: column !important; width: 100% !important; gap: 12px !important; }
-          .admin-badge-hide { display: none !important; }
-          .card-inner { flex-direction: column; align-items: flex-start !important; gap: 12px; }
-          .card-icon-hide { display: none !important; }
-          .action-buttons-group { width: 100%; justify-content: flex-end; border-top: 1px solid #f1f5f9; padding-top: 10px; }
+          .list-row {
+            flex-direction: column !important; 
+            padding: 15px !important;
+            align-items: flex-start !important;
+            gap: 12px !important;
+          }
+          .mobile-hide-dot {
+            position: absolute;
+            margin-top: 6px;
+          }
+          .row-territory {
+            padding-left: 28px;
+            width: 100%;
+          }
+          .mobile-meta-row {
+            display: flex !important;
+            flex-direction: row !important;
+            width: 100%;
+            justify-content: space-between !important;
+            align-items: center !important;
+            gap: 5px;
+            padding-left: 28px;
+          }
+          .row-date {
+            flex: 0 0 auto !important;
+            font-size: 11px !important;
+          }
+          .row-user {
+            flex: 0 0 auto !important;
+          }
+          .mobile-badge-style {
+            font-size: 10px !important;
+            padding: 4px 8px !important;
+          }
+          .row-actions {
+            flex: 1 !important;
+            width: auto !important;
+            justify-content: flex-end !important;
+            gap: 6px !important;
+          }
+          .btn-text { display: none; }
+          .mobile-action-btn {
+            width: 34px !important;
+            height: 34px !important;
+            padding: 0 !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+           .mobile-meta-row { gap: 4px; }
+           .mobile-badge-style { max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         }
       `}</style>
     </div>
   );
 }
 
-// ==================== STYLES ====================
-const pageWrapper: React.CSSProperties = { minHeight: '100vh', background: '#f8fafc', padding: '24px', fontFamily: "'Inter', sans-serif" };
-const topHeader: React.CSSProperties = { 
-  background: 'white', 
-  borderRadius: '16px', 
-  padding: '20px 24px', 
-  marginBottom: '20px', 
-  display: 'flex', 
-  justifyContent: 'space-between', 
-  alignItems: 'center', 
-  
-  // --- VISIBILITY UPDATES ---
-  // Thick, high-contrast border
-  border: '2px solid #cbd5e1', 
-  
-  // Stronger shadow to complement the thick border
-  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' 
+const pageWrapper: React.CSSProperties = { minHeight: '100vh', background: '#f8fafc', padding: '0 0 50px 0' };
+const headerGradient: React.CSSProperties = { 
+  background: 'linear-gradient(135deg, #164976 0%, #1e6aad 100%)', 
+  padding: '0 6%', height: '180px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'white'
 };
-const headerLeft: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '16px' };
-const backBtn: React.CSSProperties = { background: '#f1f5f9', border: 'none', width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#475569' };
-const logoBox: React.CSSProperties = { width: '48px', height: '48px', background: '#164976', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' };
-const headerText: React.CSSProperties = { flex: 1 };
-const mainTitle: React.CSSProperties = { margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a' };
-const mainSubtitle: React.CSSProperties = { margin: 0, fontSize: '13px', color: '#64748b' };
-const adminBadge: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '10px', background: '#f1f5f9', padding: '8px 14px', borderRadius: '12px' };
-const adminIcon: React.CSSProperties = { color: '#164976' };
-const adminInfo: React.CSSProperties = { textAlign: 'right' };
-const adminNameText: React.CSSProperties = { fontSize: '13px', fontWeight: 700 };
-const adminRoleText: React.CSSProperties = { fontSize: '11px', color: '#64748b' };
-const controlsPanel: React.CSSProperties = { 
-  background: 'white', 
-  borderRadius: '16px', 
-  padding: '16px 24px', 
-  marginBottom: '20px', 
-  display: 'flex', 
-  justifyContent: 'space-between', 
-  alignItems: 'flex-end', 
-  flexWrap: 'wrap',
-  // THICKER BORDER
-  border: '2px solid #cbd5e1' 
-};
-const controlsLeft: React.CSSProperties = { display: 'flex', gap: '16px' };
-const filterGroup: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '6px', width: '200px' };
-const filterLabel: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' };
-const selectContainer: React.CSSProperties = { position: 'relative' };
-const selectField: React.CSSProperties = { 
-  width: '100%', 
-  padding: '10px 12px', 
-  borderRadius: '8px', 
-  // THICKER & DARKER BORDER
-  border: '2px solid #cbd5e1', 
-  appearance: 'none', 
-  fontWeight: 600, 
-  fontSize: '14px', 
-  cursor: 'pointer', 
-  backgroundColor: 'white' 
-};
-const selectArrow: React.CSSProperties = { position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#64748b' };
-const dateContainer: React.CSSProperties = { position: 'relative', display: 'flex', alignItems: 'center' };
-const dateField: React.CSSProperties = { 
-  width: '100%', 
-  padding: '10px 12px', 
-  borderRadius: '8px', 
-  // THICKER & DARKER BORDER
-  border: '2px solid #cbd5e1', 
-  fontWeight: 600, 
-  fontSize: '14px', 
-  backgroundColor: 'white' 
-};
-const clearButton: React.CSSProperties = { marginLeft: '10px', background: '#fee2e2', border: 'none', color: '#ef4444', cursor: 'pointer', borderRadius: '6px', padding: '6px', display: 'flex', alignItems: 'center' };
-const refreshButton: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#164976', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' };
-const mainContent: React.CSSProperties = { 
-  background: 'white', 
-  borderRadius: '16px', 
-  padding: '24px', 
-  minHeight: '400px',
-  // THICKER BORDER
-  border: '2px solid #cbd5e1' 
-};
-const listContainer: React.CSSProperties = { 
-  display: 'flex', 
-  flexDirection: 'column', 
-  gap: '16px' // Increased gap slightly for the thicker border look
-};
-
-const reportCard: React.CSSProperties = { 
-  // Very light blue tint for the background
-  background: '#f0f9ff', 
-  
-  borderRadius: '12px', 
-  padding: '16px', 
-  
-  // Thick Dark Blue Border
-  border: '2.5px solid #164976', 
-  
-  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', 
-  cursor: 'default',
-  
-  // Subtle shadow with a blue tint to match
-  boxShadow: '0 4px 6px -1px rgba(22, 73, 118, 0.08)' 
-};
-const cardContent: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
-const cardLeft: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '12px', flex: 1 };
-const iconCircle: React.CSSProperties = { width: '44px', height: '44px', background: '#f8fafc', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 };
-const cardInfo: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 };
-const territoryName: React.CSSProperties = { margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' };
-const cardMetaRow: React.CSSProperties = { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' };
-const locationTag: React.CSSProperties = { fontSize: '10px', background: '#e2e8f0', padding: '2px 8px', borderRadius: '6px', color: '#475569', fontWeight: 700 };
-const userTag: React.CSSProperties = { fontSize: '10px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px', color: '#164976', fontWeight: 700, display: 'flex', alignItems: 'center' };
-const actionButtonsGroup: React.CSSProperties = { display: 'flex', gap: '8px', flexShrink: 0, position: 'relative', zIndex: 10 };
-const previewButton: React.CSSProperties = { 
-  display: 'flex', 
-  alignItems: 'center', 
-  gap: '6px', 
-  padding: '8px 16px', 
-  borderRadius: '8px', 
-  // THICKER BORDER ON BUTTON
-  border: '2px solid #164976', 
-  background: 'white', 
-  fontWeight: 700, 
-  cursor: 'pointer', 
-  fontSize: '13px', 
-  color: '#164976' 
-};
-const downloadButton: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '8px', background: '#164976', color: 'white', border: 'none', cursor: 'pointer' };
-const loadingState: React.CSSProperties = { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px' };
-const spinner: React.CSSProperties = { width: '36px', height: '36px', border: '4px solid #f1f5f9', borderTop: '4px solid #164976', borderRadius: '50%', animation: 'spin 1s linear infinite' };
-const loadingText: React.CSSProperties = { marginTop: '16px', fontSize: '14px', color: '#64748b' };
-const emptyState: React.CSSProperties = { textAlign: 'center', padding: '60px 20px' };
-const emptyTitle: React.CSSProperties = { margin: '16px 0 8px 0', fontSize: '18px', fontWeight: 700, color: '#475569' };
-const emptyText: React.CSSProperties = { fontSize: '14px', color: '#94a3b8' };
+const headerLeftContent: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '20px' };
+const backBtnGradient: React.CSSProperties = { background: 'rgba(255,255,255,0.15)', border: 'none', width: '40px', height: '40px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'white' };
+const logoIconBox: React.CSSProperties = { width: '48px', height: '48px', background: 'rgba(255,255,255,0.2)', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+const titleWhite: React.CSSProperties = { margin: 0, fontSize: '30px', fontWeight: 800 };
+const subtitleWhite: React.CSSProperties = { margin: '4px 0 0 0', fontSize: '13px', color: 'rgba(255,255,255,0.7)', fontWeight: 500, display: 'flex', alignItems: 'center' };
+const headerRightContent: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '15px' };
+const pillBadge: React.CSSProperties = { background: 'rgba(0,0,0,0.2)', padding: '8px 18px', borderRadius: '100px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid rgba(255,255,255,0.1)' };
+const pillLabel: React.CSSProperties = { fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.6)' };
+const pillValue: React.CSSProperties = { fontSize: '16px', fontWeight: 800 };
+const refreshBtnWhite: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px', background: 'white', color: '#164976', border: 'none', borderRadius: '12px', fontWeight: 700, cursor: 'pointer' };
+const filterBar: React.CSSProperties = { background: 'white', margin: '-35px 6% 30px 6%', borderRadius: '18px', height: '75px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 30px', boxShadow: '0 12px 30px -10px rgba(0,0,0,0.1)', position: 'relative', zIndex: 100 };
+const filterGroup: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '25px' };
+const inputContainer: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '12px' };
+const selectWrapper: React.CSSProperties = { position: 'relative', display: 'flex', alignItems: 'center' };
+const selectReset: React.CSSProperties = { border: 'none', background: 'transparent', fontSize: '14px', fontWeight: 700, color: '#1e293b', outline: 'none', appearance: 'none', minWidth: '180px' };
+const chevronPosition: React.CSSProperties = { position: 'absolute', right: 0, pointerEvents: 'none' };
+const dateReset: React.CSSProperties = { border: 'none', background: 'transparent', fontSize: '14px', fontWeight: 700, color: '#1e293b', outline: 'none' };
+const dividerVertical: React.CSSProperties = { width: '1px', height: '25px', background: '#f1f5f9' };
+const clearBtnMinimal: React.CSSProperties = { border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer' };
+const timeIndicator: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '8px', color: '#164976', background: '#f0f7ff', padding: '10px 18px', borderRadius: '12px', fontSize: '13px', fontWeight: 800 };
+const listArea: React.CSSProperties = { padding: '0 6%' };
+const listStack: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '8px' };
+const tableHeaderLabels: React.CSSProperties = { display: 'flex', padding: '0 25px 12px 25px', color: '#94a3b8', fontSize: '11px', letterSpacing: '0.08em', fontWeight: 800 };
+const listRow: React.CSSProperties = { display: 'flex', alignItems: 'center', padding: '18px 25px', borderRadius: '16px', background: 'white', border: '1px solid #f1f5f9', transition: '0.3s', position: 'relative' };
+const statusDot = (color: string): React.CSSProperties => ({ width: '8px', height: '8px', borderRadius: '50%', background: color, marginRight: '20px', boxShadow: `0 0 0 5px ${color}15` });
+const rowMainTitle: React.CSSProperties = { fontSize: '15px', fontWeight: 700, color: '#0f172a' };
+const rowDate: React.CSSProperties = { flex: 1, color: '#64748b', fontSize: '13px', fontWeight: 600 };
+const userLabel: React.CSSProperties = { background: '#f8fafc', padding: '6px 14px', borderRadius: '8px', fontSize: '12px', color: '#164976', fontWeight: 700, border: '1px solid #e2e8f0' };
+const rowActionGroup: React.CSSProperties = { width: '160px', display: 'flex', gap: '10px', justifyContent: 'flex-end' };
+const btnView: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', borderRadius: '11px', border: '1.5px solid #164976', background: 'transparent', color: '#164976', fontWeight: 800, fontSize: '13px', cursor: 'pointer' };
+const btnDownload: React.CSSProperties = { width: '38px', height: '38px', borderRadius: '11px', background: '#164976', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+const loadingCenter: React.CSSProperties = { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '100px', gap: '15px', color: '#64748b' };
+const emptyContainer: React.CSSProperties = { textAlign: 'center', padding: '100px', color: '#94a3b8' };

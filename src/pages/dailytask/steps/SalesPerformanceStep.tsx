@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FiBarChart2 } from "react-icons/fi";
 import StepShell from "../StepShell";
 
@@ -73,8 +73,69 @@ const cellInputStyle = (readOnly = false): React.CSSProperties => ({
 });
 
 const SalesPerformanceStep = ({ totalSteps, stepNumber, initialData, onNext, onBack, onChange }: Props) => {
-  const [rows, setRows] = useState<SalesRow[]>(initialData?.rows ?? DEFAULT_ROWS);
+  // Initialize from localStorage with fallback
+  const [rows, setRows] = useState<SalesRow[]>(() => {
+    console.log("🎬 SalesPerformance: Initializing...");
+    console.log("   initialData:", initialData);
+    
+    // Priority 1: Use initialData from parent if it has content
+    if (initialData?.rows && initialData.rows.length > 0) {
+      const hasData = initialData.rows.some(row => row.mtdTarget || row.mtdAchieved);
+      if (hasData) {
+        console.log("✅ Using initialData from parent");
+        return initialData.rows;
+      }
+    }
+    
+    // Priority 2: Load from localStorage
+    try {
+      const saved = localStorage.getItem("salesPerformance");
+      console.log("   localStorage salesPerformance:", saved ? "FOUND" : "NOT FOUND");
+      
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.rows && Array.isArray(parsed.rows)) {
+          const hasData = parsed.rows.some((row: SalesRow) => row.mtdTarget || row.mtdAchieved);
+          if (hasData) {
+            console.log("✅ Loaded from localStorage");
+            return parsed.rows;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("❌ Failed to parse salesPerformance:", err);
+    }
+    
+    console.log("⚠️ Using DEFAULT_ROWS");
+    return DEFAULT_ROWS;
+  });
+  
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Auto-save to localStorage whenever rows change (debounced)
+  useEffect(() => {
+    // Only save if there's actual data entered
+    const hasData = rows.some(row => row.mtdTarget || row.mtdAchieved);
+    
+    if (hasData) {
+      const timer = setTimeout(() => {
+        const payload = { rows };
+        
+        // Add metadata (same as parent does)
+        const visitDetails = JSON.parse(localStorage.getItem("visitDetails") || "{}");
+        const reportGroupId = localStorage.getItem("reportGroupId");
+        
+        (payload as any).reportGroupId = reportGroupId;
+        (payload as any).userName = visitDetails.userName || "Unknown";
+        (payload as any).userRole = visitDetails.area || "";
+        
+        console.log("💾 Auto-saving salesPerformance:", payload);
+        localStorage.setItem("salesPerformance", JSON.stringify(payload));
+      }, 500); // Wait 500ms after last change
+
+      return () => clearTimeout(timer); // Cancel if user keeps typing
+    }
+  }, [rows]);
 
   const handleRowChange = (id: string, field: keyof SalesRow, value: string) => {
     setRows((prev) => {
@@ -99,7 +160,10 @@ const SalesPerformanceStep = ({ totalSteps, stepNumber, initialData, onNext, onB
   };
 
   const handleNext = () => {
-    if (validate()) onNext({ rows });
+    if (validate()) {
+      console.log("📤 SalesPerformance: Sending data to parent");
+      onNext({ rows });
+    }
   };
 
   return (

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FiHome, FiUpload } from "react-icons/fi";
 import InputField from "../InputField";
 import StepShell from "../StepShell";
@@ -166,26 +166,135 @@ const SectionDivider = ({ title }: { title: string }) => (
 
 // ── Main Component ────────────────────────────────────────────────────────────
 const DBProfileStep = ({ totalSteps, stepNumber, initialData, onNext, onBack, username }: Props) => {
-  const [formData, setFormData] = useState<DBProfileData>(initialData ?? EMPTY);
+  // ✅ FIXED: Load from localStorage with proper fallback
+  const [formData, setFormData] = useState<DBProfileData>(() => {
+    console.log("🎬 DBProfile: Initializing...");
+    console.log("   initialData:", initialData);
+    
+    // Priority 1: Use initialData from parent if it has actual content
+    if (initialData && initialData.dbOwnerContact) {
+      console.log("✅ Using initialData from parent");
+      return initialData;
+    }
+    
+    // Priority 2: Load directly from localStorage
+    try {
+      const saved = localStorage.getItem("dbProfile");
+      console.log("   localStorage dbProfile:", saved ? "FOUND" : "NOT FOUND");
+      
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        console.log("✅ Loaded from localStorage:", parsed);
+        
+        // Verify it has actual form data (not just metadata)
+        if (parsed.dbOwnerContact || parsed.coverageArea) {
+          return parsed;
+        }
+      }
+    } catch (err) {
+      console.error("❌ Failed to parse dbProfile:", err);
+    }
+    
+    console.log("⚠️ Using EMPTY");
+    return EMPTY;
+  });
+  
   const [errors, setErrors] = useState<Partial<Record<keyof DBProfileData, string>>>({});
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // ✅ Number validation helper
+  // AUTO-SAVE: Persist to localStorage on every change
+  useEffect(() => {
+    // Check if form has any data
+    const hasData = 
+      formData.dbOwnerContact ||
+      formData.coverageArea ||
+      formData.routeStrength ||
+      formData.salesTeam ||
+      formData.vehicleAvailability ||
+      formData.logBookUpdate ||
+      formData.territoryRouteMap ||
+      formData.routePlan ||
+      formData.creditBillCount ||
+      formData.creditBillTotal ||
+      formData.chequeCount ||
+      formData.chequeTotal ||
+      formData.cashTotal ||
+      formData.progressSheetUpdate ||
+      formData.skuSalesUpdate ||
+      formData.skuSalesComment ||
+      formData.storeLength ||
+      formData.storeWidth ||
+      formData.storeCondition ||
+      formData.marketReturnCondition ||
+      formData.tableCount ||
+      formData.chairCount ||
+      formData.storeComments;
+
+    if (hasData) {
+      const timer = setTimeout(() => {
+        console.log("💾 Auto-saving DBProfile to localStorage");
+        // Save everything EXCEPT the File objects (can't serialize)
+        const dataToSave = {
+          dbOwnerContact: formData.dbOwnerContact,
+          coverageArea: formData.coverageArea,
+          routeStrength: formData.routeStrength,
+          salesTeam: formData.salesTeam,
+          vehicleAvailability: formData.vehicleAvailability,
+          logBookUpdate: formData.logBookUpdate,
+          territoryRouteMap: formData.territoryRouteMap,
+          routePlan: formData.routePlan,
+          creditBillCount: formData.creditBillCount,
+          creditBillTotal: formData.creditBillTotal,
+          chequeCount: formData.chequeCount,
+          chequeTotal: formData.chequeTotal,
+          cashTotal: formData.cashTotal,
+          progressSheetUpdate: formData.progressSheetUpdate,
+          skuSalesUpdate: formData.skuSalesUpdate,
+          skuSalesComment: formData.skuSalesComment,
+          storeLength: formData.storeLength,
+          storeWidth: formData.storeWidth,
+          storeCondition: formData.storeCondition,
+          marketReturnCondition: formData.marketReturnCondition,
+          tableCount: formData.tableCount,
+          chairCount: formData.chairCount,
+          storeComments: formData.storeComments,
+          
+          routeMapImageBase64: formData.routeMapImageBase64,
+          routePlanImageBase64: formData.routePlanImageBase64,
+        };
+        
+        localStorage.setItem("dbProfile", JSON.stringify(dataToSave));
+      }, 500); // Debounce: save 500ms after user stops typing
+
+      return () => clearTimeout(timer);
+    }
+  }, [formData]); // Run whenever formData changes
+
+  //Number validation helper
   const isValidNumber = (value: string): boolean => {
     return /^\d*\.?\d*$/.test(value); // Allows digits and optional decimal point
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+
+
+     // Phone number validation - allows formatted phone numbers
+  if (name === "dbOwnerContact") {
+    const phonePattern = /^[0-9\s\-+()]*$/;
+    if (value !== "" && !phonePattern.test(value)) {
+      return;
+    }
+  }
     
-    // ✅ Fields that must be numbers only
+    // Fields that must be numbers only
     const numberFields = [
       "creditBillCount", "creditBillTotal", "chequeCount", 
       "chequeTotal", "cashTotal", "storeLength", "storeWidth", 
       "tableCount", "chairCount"
     ];
     
-    // ✅ Validate number fields
+    // Validate number fields
     if (numberFields.includes(name)) {
       if (value !== "" && !isValidNumber(value)) {
         return; // Don't update if not a valid number
@@ -227,7 +336,7 @@ const DBProfileStep = ({ totalSteps, stepNumber, initialData, onNext, onBack, us
       }
     });
     
-    // ✅ Validate number fields contain valid numbers
+    // Validate number fields contain valid numbers
     const numberFields: (keyof DBProfileData)[] = [
       "creditBillCount", "creditBillTotal", "chequeCount", 
       "chequeTotal", "cashTotal", "storeLength", "storeWidth", 
@@ -263,6 +372,8 @@ const DBProfileStep = ({ totalSteps, stepNumber, initialData, onNext, onBack, us
 
       // Add userName
       (updatedData as any).userName = username;
+
+      console.log("📤 DBProfile: Sending data to parent:", updatedData);
 
       // Pass to parent
       onNext(updatedData);
@@ -380,7 +491,7 @@ const DBProfileStep = ({ totalSteps, stepNumber, initialData, onNext, onBack, us
         />
       </div>
       <InputField 
-        label="Cash Total" 
+        label="Cash + Bank Total" 
         name="cashTotal" 
         placeholder="e.g. 45000"
         value={formData.cashTotal} 
@@ -388,7 +499,7 @@ const DBProfileStep = ({ totalSteps, stepNumber, initialData, onNext, onBack, us
         error={errors.cashTotal} 
       />
 
-      {/* ✅ NEW SECTION: Progress Sheet Update */}
+      {/* Progress Sheet Update */}
       <SectionDivider title="Progress & SKU Updates" />
       
       <TextAreaField 
@@ -400,7 +511,7 @@ const DBProfileStep = ({ totalSteps, stepNumber, initialData, onNext, onBack, us
         error={errors.progressSheetUpdate}
       />
 
-      {/* ✅ NEW: SKU Sales Update */}
+      {/* SKU Sales Update */}
       <RadioField 
         label="SKU Sales Update" 
         value={formData.skuSalesUpdate} 
@@ -412,7 +523,7 @@ const DBProfileStep = ({ totalSteps, stepNumber, initialData, onNext, onBack, us
         ]}
       />
 
-      {/* ✅ NEW: SKU Sales Comment */}
+      {/* SKU Sales Comment */}
       <TextAreaField 
         label="SKU Sales Comment" 
         name="skuSalesComment" 

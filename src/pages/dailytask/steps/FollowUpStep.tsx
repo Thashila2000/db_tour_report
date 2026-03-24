@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FiBell, FiPlus, FiTrash2 } from "react-icons/fi";
 import StepShell from "../StepShell";
 
@@ -63,8 +63,69 @@ const cellInput: React.CSSProperties = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 const FollowUpStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: Props) => {
-  const [rows, setRows]     = useState<FollowUpRow[]>(initialData?.rows ?? DEFAULT_ROWS);
+  // ✅ FIXED: Initialize from localStorage with fallback
+  const [rows, setRows] = useState<FollowUpRow[]>(() => {
+    console.log("🎬 FollowUp: Initializing...");
+    console.log("   initialData:", initialData);
+    
+    // Priority 1: Use initialData from parent if it has content
+    if (initialData?.rows && initialData.rows.length > 0) {
+      const hasData = initialData.rows.some(row => row.responsible);
+      if (hasData) {
+        console.log("✅ Using initialData from parent");
+        return initialData.rows;
+      }
+    }
+    
+    // Priority 2: Load from localStorage
+    try {
+      const saved = localStorage.getItem("followUp");
+      console.log("   localStorage followUp:", saved ? "FOUND" : "NOT FOUND");
+      
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.rows && Array.isArray(parsed.rows)) {
+          const hasData = parsed.rows.some((row: FollowUpRow) => row.responsible);
+          if (hasData) {
+            console.log("✅ Loaded from localStorage");
+            return parsed.rows;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("❌ Failed to parse followUp:", err);
+    }
+    
+    console.log("⚠️ Using DEFAULT_ROWS");
+    return DEFAULT_ROWS;
+  });
+  
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // ✅ ADD: Auto-save to localStorage whenever rows change (debounced)
+  useEffect(() => {
+    // Only save if there's actual data entered
+    const hasData = rows.some(row => row.responsible);
+    
+    if (hasData) {
+      const timer = setTimeout(() => {
+        const payload = { rows };
+        
+        // Add metadata (same as parent does)
+        const visitDetails = JSON.parse(localStorage.getItem("visitDetails") || "{}");
+        const reportGroupId = localStorage.getItem("reportGroupId");
+        
+        (payload as any).reportGroupId = reportGroupId;
+        (payload as any).userName = visitDetails.userName || "Unknown";
+        (payload as any).userRole = visitDetails.area || "";
+        
+        console.log("💾 Auto-saving followUp:", payload);
+        localStorage.setItem("followUp", JSON.stringify(payload));
+      }, 500); // Wait 500ms after last change
+
+      return () => clearTimeout(timer); // Cancel if user keeps typing
+    }
+  }, [rows]);
 
   const handleChange = (id: string, field: keyof FollowUpRow, value: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
@@ -87,8 +148,7 @@ const FollowUpStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: P
 
   const handleNext = () => {
     if (validate()) {
-      // ✅ We pass the rows exactly as they are. 
-      // Your parent component should map these to match the FollowUpRequest DTO
+      console.log("📤 FollowUp: Sending data to parent");
       onNext({ rows });
     }
   };

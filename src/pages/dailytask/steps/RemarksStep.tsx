@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { FiFileText, FiCheckCircle, FiPlus } from "react-icons/fi";
+import { useState, useEffect } from "react";
+import { FiFileText } from "react-icons/fi";
 import StepShell from "../StepShell";
 import axios from "axios";
+import Swal from "sweetalert2";
 
 export interface RemarksData {
   remarks: string;
@@ -40,12 +41,46 @@ const inputStyle: React.CSSProperties = {
 };
 
 const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => {
-  const [remarks, setRemarks] = useState(initialData?.remarks ?? "");
-  const [preparedBy, setPreparedBy] = useState(initialData?.preparedBy ?? "");
+  const [remarks, setRemarks] = useState(() => {
+    if (initialData?.remarks) return initialData.remarks;
+    try {
+      const saved = localStorage.getItem("remarks");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.remarks) return parsed.remarks;
+      }
+    } catch (err) {
+      console.error("❌ Failed to parse remarks:", err);
+    }
+    return "";
+  });
+
+  const [preparedBy, setPreparedBy] = useState(() => {
+    if (initialData?.preparedBy) return initialData.preparedBy;
+    try {
+      const saved = localStorage.getItem("remarks");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.preparedBy) return parsed.preparedBy;
+      }
+    } catch (err) {
+      console.error("❌ Failed to parse preparedBy:", err);
+    }
+    return "";
+  });
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [summary, setSummary] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (remarks.trim() || preparedBy.trim()) {
+      const timer = setTimeout(() => {
+        const payload = { remarks, preparedBy };
+        localStorage.setItem("remarks", JSON.stringify(payload));
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [remarks, preparedBy]);
 
   const getActualLocalTime = () => {
     const now = new Date();
@@ -72,25 +107,36 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
 
   const handleSubmit = async () => {
     if (!validate()) return;
+
+    // Show Loading Overlay
+    Swal.fire({
+      title: 'Submitting Report',
+      text: 'Please wait while we sync your data...',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
     setSubmitting(true);
 
     try {
       const userStr = localStorage.getItem("user");
       const reportGroupId = localStorage.getItem("reportGroupId");
-      
+
       if (!userStr || !reportGroupId) {
-        alert("❌ Missing Session Data. Please restart the report.");
+        Swal.fire({ icon: 'error', title: 'Session Expired', text: 'Missing session data. Please restart the report.' });
         setSubmitting(false);
         return;
       }
 
       const loggedInUser = JSON.parse(userStr);
-      const userName = loggedInUser.name || "Unknown"; 
+      const userName = loggedInUser.name || "Unknown";
       const userRole = loggedInUser.role || "";
 
       const visitDetailsStr = localStorage.getItem("visitDetails");
       const visitDetails = visitDetailsStr ? JSON.parse(visitDetailsStr) : null;
-      const userRoleWithArea = visitDetails 
+      const userRoleWithArea = visitDetails
         ? `${userRole} ${visitDetails.area ?? ""}`.trim()
         : userRole;
 
@@ -106,20 +152,20 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
       const salesPerformance = JSON.parse(localStorage.getItem("salesPerformance") || "{}");
       const stockStatus = JSON.parse(localStorage.getItem("stockStatus") || "{}");
       const issues = JSON.parse(localStorage.getItem("issuesIdentified") || "{}");
-      const actionsData = JSON.parse(localStorage.getItem("actionsAgreed") || "{}"); 
+      const actionsData = JSON.parse(localStorage.getItem("actionsAgreed") || "{}");
       const followUp = JSON.parse(localStorage.getItem("followUp") || "{}");
       const remarksData = withThread({ remarks, preparedBy });
 
       const actualLocalTime = getActualLocalTime();
 
-      const staffObj = actionsData.staffActions || { asm: {}, ase: {}, csr: {}};
+      const staffObj = actionsData.staffActions || { asm: {}, ase: {}, csr: {} };
       const staffPayload = [
         { position: "ASM", name: staffObj.asm?.name?.trim() || "", comment: staffObj.asm?.comment?.trim() || "" },
         { position: "ASE", name: staffObj.ase?.name?.trim() || "", comment: staffObj.ase?.comment?.trim() || "" },
         { position: "CSR", name: staffObj.csr?.name?.trim() || "", comment: staffObj.csr?.comment?.trim() || "" }
       ]
-      .filter(item => item.name !== "" || item.comment !== "")
-      .map(item => ({ ...item, reportGroupId, userName }));
+        .filter(item => item.name !== "" || item.comment !== "")
+        .map(item => ({ ...item, reportGroupId, userName }));
 
       // 2. Prepare Final Payloads
       const payloads = {
@@ -131,14 +177,13 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
           region: visitDetails?.region || "Unknown Region",
           area: visitDetails?.area || "Unknown Area",
           territoryName: visitDetails?.territoryName || "Unknown Territory",
-          createdAt: actualLocalTime, 
-          visitTime: actualLocalTime  
+          createdAt: actualLocalTime,
+          visitTime: actualLocalTime
         },
-        // ✅ Explicitly ensuring the Base64 image is included here
-        visitDetails: { 
-          ...visitDetails, 
+        visitDetails: {
+          ...visitDetails,
           reportGroupId,
-          accompaniedByImage: visitDetails?.accompaniedByImage || null 
+          accompaniedByImage: visitDetails?.accompaniedByImage || null
         },
         dbProfile: withThread({
           ...dbProfile,
@@ -147,24 +192,43 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
         }),
         salesPerformance: withThread({ rows: salesPerformance.rows || [] }),
         stockStatus: {
-          reportGroupId, userName, userRole: userRoleWithArea,
-          categories: (stockStatus.categories || [])
-            .filter((cat: any) => cat.items && cat.items.length > 0)
-            .map((cat: any) => ({
-              ...cat,
-              reportGroupId,
-              items: (cat.items || []).map((item: any) => ({ ...item, reportGroupId, categoryName: cat.name, userName, userRole: userRoleWithArea }))
-            }))
+          reportGroupId,
+          userName,
+          userRole: userRoleWithArea,
+          items: (stockStatus.categories || [])
+            .flatMap((cat: any) => {
+              return (cat.items || [])
+                .filter((item: any) => item.itemName && item.itemName.trim() !== "" && (item.stockLevel || item.systemStock))
+                .map((item: any) => {
+                  const stockLevel = parseFloat(item.stockLevel) || 0;
+                  const systemStock = parseFloat(item.systemStock) || 0;
+                  const varianceNum = stockLevel - systemStock;
+                  const variance = varianceNum > 0 ? `+${varianceNum.toFixed(2)}` : varianceNum < 0 ? varianceNum.toFixed(2) : "+0.00";
+
+                  return {
+                    categoryName: cat.name,
+                    categoryComment: cat.comment || "",
+                    itemName: item.itemName,
+                    stockLevel: item.stockLevel,
+                    systemStock: item.systemStock,
+                    variance: variance
+                  };
+                });
+            })
         },
         issues: {
           reportGroupId, userName, userRole: userRoleWithArea,
-          rows: (issues.rows || []).filter((r: any) => r.description.trim() !== "").map((r: any) => ({ ...r, reportGroupId, userName, userRole: userRoleWithArea }))
+          rows: (issues.rows || [])
+            .filter((r: any) => r.description && r.description.trim() !== "")
+            .map((r: any) => ({ ...r, reportGroupId, userName, userRole: userRoleWithArea }))
         },
         actions: {
           reportGroupId, userName, userRole: userRoleWithArea,
-          rows: (actionsData.rows || []).filter((r: any) => r.action?.trim() !== "").map((r: any) => ({ ...r, reportGroupId, userName, userRole: userRoleWithArea }))
+          rows: (actionsData.rows || [])
+            .filter((r: any) => r.action && r.action.trim() !== "")
+            .map((r: any) => ({ ...r, reportGroupId, userName, userRole: userRoleWithArea }))
         },
-        staffActions: staffPayload, 
+        staffActions: staffPayload,
         followUp: withThread(followUp),
         finalRemarks: remarksData,
       };
@@ -189,7 +253,7 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
       await postData("stock-status", payloads.stockStatus, "Stock Status");
       await postData("issues", payloads.issues, "Issues Identified");
       await postData("actions", payloads.actions, "Actions Agreed");
-      
+
       if (payloads.staffActions.length > 0) {
         await postData("action-staff/bulk", payloads.staffActions, "Staff Actions");
       }
@@ -197,54 +261,48 @@ const RemarksStep = ({ totalSteps, stepNumber, initialData, onBack }: Props) => 
       await postData("follow-up", payloads.followUp, "Follow Up");
       await postData("remarks", payloads.finalRemarks, "Remarks");
 
-      // 4. Cleanup
-      if (results.failed.length === 0) {
-        setSummary(results.successful);
-        ["visitDetails", "dbProfile", "salesPerformance", "stockStatus", "issuesIdentified", "actionsAgreed", "followUp", "remarks", "reportGroupId"].forEach(k => localStorage.removeItem(k));
-        setIsSuccess(true);
-      } else {
-        alert(`❌ Submission Partial: ${results.failed.join(", ")}`);
-      }
+    // 4. Cleanup & Final Alert
+if (results.failed.length === 0) {
+  // 1. Define EVERY key used in your multi-step form
+  const keysToClear = [
+    "visitDetails", 
+    "dbProfile", 
+    "salesPerformance", 
+    "stockStatus", 
+    "issuesIdentified", 
+    "actionsAgreed", 
+    "followUp", 
+    "remarks", 
+    "reportGroupId", 
+    "currentStepIndex",
+    "distributorSearch" // Clear search text too if you store it
+  ];
 
+  // 2. Clear them all
+  keysToClear.forEach(k => localStorage.removeItem(k));
+
+  Swal.fire({
+    icon: 'success',
+    title: 'Report Synchronized!',
+    text: 'Data submitted successfully.',
+    confirmButtonText: 'OK',
+    confirmButtonColor: '#164976',
+  }).then(() => {
+    
+    // 3. Instead of reload, redirect to the root or step 1
+     window.location.href = "/daily-task"; 
+  });
+}
     } catch (error) {
       console.error("💥 Critical Failure:", error);
+      Swal.fire({ icon: 'error', title: 'Critical Failure', text: 'An unexpected error occurred.' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (isSuccess) {
-    return (
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: '#f8fafd', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-        <div style={{ textAlign: 'center', padding: '40px 24px', background: 'white', borderRadius: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.08)', maxWidth: '450px', margin: '0 auto' }}>
-          <div style={{ width: '80px', height: '80px', background: '#dcfce7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-            <FiCheckCircle style={{ color: '#10b981', fontSize: '40px' }} />
-          </div>
-          <h2 style={{ color: '#111827', fontSize: '22px', fontWeight: 800, marginBottom: '8px' }}>Report Synchronized!</h2>
-          <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '32px' }}>All sections have been saved successfully.</p>
-          <div style={{ textAlign: 'left', background: '#f8fafc', padding: '16px', borderRadius: '16px', marginBottom: '32px', border: '1px solid #e2e8f0', maxHeight: '180px', overflowY: 'auto' }}>
-            {summary.map((item, idx) => (
-              <div key={idx} style={{ fontSize: '13px', color: '#334155', padding: '4px 0', display: 'flex', alignItems: 'center' }}>
-                <div style={{ width: '6px', height: '6px', background: '#10b981', borderRadius: '50%', marginRight: '12px' }} /> {item}
-              </div>
-            ))}
-          </div>
-          <button onClick={() => window.location.reload()} style={{ width: '100%', padding: '14px', background: '#164976', color: 'white', border: 'none', borderRadius: '14px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '14px' }}>
-            <FiPlus /> Create New Report
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <StepShell stepNumber={stepNumber} totalSteps={totalSteps} title="General Remarks" Icon={FiFileText} onNext={handleSubmit} onBack={onBack}>
-      {submitting && (
-        <div style={{ padding: "1.2rem", backgroundColor: "#dbeafe", border: "2px solid #3b82f6", borderRadius: "10px", marginBottom: "1.5rem", textAlign: "center" }}>
-          <div style={{ color: "#1e40af", fontWeight: 700, fontSize: "14px", marginBottom: "0.5rem" }}>🔄 Syncing report forms to database...</div>
-          <div style={{ color: "#3b82f6", fontSize: "12px" }}>Please wait...</div>
-        </div>
-      )}
       <div>
         <label style={labelStyle}>Remarks</label>
         <textarea

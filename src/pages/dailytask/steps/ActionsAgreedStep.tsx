@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FiCheckSquare, FiPlus, FiTrash2, FiUsers } from "react-icons/fi";
 import StepShell from "../StepShell";
 
@@ -37,6 +37,12 @@ const DEFAULT_ROWS: ActionRow[] = [
   { id: "a3", action: "Improve outlet coverage", comment: "", isFixed: true },
 ];
 
+const DEFAULT_STAFF_ACTIONS = {
+  asm: { name: "", comment: "" },
+  ase: { name: "", comment: "" },
+  csr: { name: "", comment: "" },
+};
+
 const cellInput: React.CSSProperties = {
   width: "100%",
   padding: "10px 14px",
@@ -50,7 +56,6 @@ const cellInput: React.CSSProperties = {
   transition: "all 0.2s ease",
 };
 
-// ✅ FIX: Move StaffInputRow OUTSIDE the main component to prevent focus loss
 interface StaffInputRowProps {
   label: string;
   role: 'asm' | 'ase' | 'csr';
@@ -86,18 +91,123 @@ interface Props {
   totalSteps: number;
   stepNumber: number;
   initialData?: ActionsAgreedData;
-  visitDetails: { userName: string; role: string; area: string };
+  visitDetails: { 
+    userName?: string; 
+    role?: string; 
+    area?: string 
+  };
   onNext: (data: ActionsAgreedData) => void;
   onBack: () => void;
 }
 
 const ActionsAgreedStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: Props) => {
-  const [rows, setRows] = useState<ActionRow[]>(initialData?.rows ?? DEFAULT_ROWS);
-  const [staffActions, setStaffActions] = useState(initialData?.staffActions ?? {
-    asm: { name: "", comment: "" },
-    ase: { name: "", comment: "" },
-    csr: { name: "", comment: "" },
+  // ✅ FIXED: Initialize rows from localStorage with fallback
+  const [rows, setRows] = useState<ActionRow[]>(() => {
+    console.log("🎬 ActionsAgreed: Initializing rows...");
+    console.log("   initialData:", initialData);
+    
+    // Priority 1: Use initialData from parent if it has content
+    if (initialData?.rows && initialData.rows.length > 0) {
+      const hasData = initialData.rows.some(row => row.comment);
+      if (hasData) {
+        console.log("✅ Using initialData rows from parent");
+        return initialData.rows;
+      }
+    }
+    
+    // Priority 2: Load from localStorage
+    try {
+      const saved = localStorage.getItem("actionsAgreed");
+      console.log("   localStorage actionsAgreed:", saved ? "FOUND" : "NOT FOUND");
+      
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.rows && Array.isArray(parsed.rows)) {
+          const hasData = parsed.rows.some((row: ActionRow) => row.comment);
+          if (hasData) {
+            console.log("✅ Loaded rows from localStorage");
+            return parsed.rows;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("❌ Failed to parse actionsAgreed:", err);
+    }
+    
+    console.log("⚠️ Using DEFAULT_ROWS");
+    return DEFAULT_ROWS;
   });
+
+ // ✅ FIXED: Initialize staffActions from localStorage with fallback
+const [staffActions, setStaffActions] = useState<ActionsAgreedData['staffActions']>(() => {
+  console.log("🎬 ActionsAgreed: Initializing staffActions...");
+  
+  // Priority 1: Use initialData from parent if it has content
+  if (initialData?.staffActions) {
+    const hasData = 
+      initialData.staffActions.asm.name || initialData.staffActions.asm.comment ||
+      initialData.staffActions.ase.name || initialData.staffActions.ase.comment ||
+      initialData.staffActions.csr.name || initialData.staffActions.csr.comment;
+    
+    if (hasData) {
+      console.log("✅ Using initialData staffActions from parent");
+      return initialData.staffActions;
+    }
+  }
+  
+  // Priority 2: Load from localStorage
+  try {
+    const saved = localStorage.getItem("actionsAgreed");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.staffActions) {
+        const hasData = 
+          parsed.staffActions.asm?.name || parsed.staffActions.asm?.comment ||
+          parsed.staffActions.ase?.name || parsed.staffActions.ase?.comment ||
+          parsed.staffActions.csr?.name || parsed.staffActions.csr?.comment;
+        
+        if (hasData) {
+          console.log("✅ Loaded staffActions from localStorage");
+          return parsed.staffActions;
+        }
+      }
+    }
+  } catch (err) {
+    console.error("❌ Failed to parse staffActions:", err);
+  }
+  
+  console.log("⚠️ Using DEFAULT_STAFF_ACTIONS");
+  return DEFAULT_STAFF_ACTIONS;
+});
+
+  // ✅ ADD: Auto-save to localStorage whenever data changes (debounced)
+  useEffect(() => {
+    // Only save if there's actual data entered
+    const hasRowData = rows.some(row => row.comment);
+    const hasStaffData = 
+      staffActions.asm.name || staffActions.asm.comment ||
+      staffActions.ase.name || staffActions.ase.comment ||
+      staffActions.csr.name || staffActions.csr.comment;
+    
+    if (hasRowData || hasStaffData) {
+      const timer = setTimeout(() => {
+        const payload = { rows, staffActions };
+        
+        // Add metadata (same as parent does)
+        const visitDetails = JSON.parse(localStorage.getItem("visitDetails") || "{}");
+        const reportGroupId = localStorage.getItem("reportGroupId");
+        
+        (payload as any).reportGroupId = reportGroupId;
+        (payload as any).userName = visitDetails.userName || "Unknown";
+        (payload as any).userRole = visitDetails.area || "";
+        
+        console.log("💾 Auto-saving actionsAgreed:", payload);
+        localStorage.setItem("actionsAgreed", JSON.stringify(payload));
+      }, 500); // Wait 500ms after last change
+
+      return () => clearTimeout(timer); // Cancel if user keeps typing
+    }
+  }, [rows, staffActions]);
 
   const handleChange = (id: string, field: keyof ActionRow, value: string) => {
     setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
@@ -114,8 +224,8 @@ const ActionsAgreedStep = ({ totalSteps, stepNumber, initialData, onNext, onBack
   const removeRow = (id: string) => setRows(prev => prev.filter(r => r.id !== id));
 
   const handleNext = () => {
+    console.log("📤 ActionsAgreed: Sending data to parent");
     const data: ActionsAgreedData = { rows, staffActions };
-    localStorage.setItem("actionsAgreed", JSON.stringify(data));
     onNext(data);
   };
 
@@ -187,7 +297,6 @@ const ActionsAgreedStep = ({ totalSteps, stepNumber, initialData, onNext, onBack
           <FiUsers size={18} /> Actions Agreed with Staff
         </h3>
         <div style={{ background: "#fff", padding: "24px", borderRadius: "14px", border: "2px solid #4a6d8c" }}>
-          {/* Use the external component and pass props */}
           <StaffInputRow label="ASM" role="asm" staffActions={staffActions} onStaffChange={handleStaffChange} />
           <StaffInputRow label="ASE" role="ase" staffActions={staffActions} onStaffChange={handleStaffChange} />
           <StaffInputRow label="CSR" role="csr" staffActions={staffActions} onStaffChange={handleStaffChange} />

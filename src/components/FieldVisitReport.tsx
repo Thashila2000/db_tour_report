@@ -17,7 +17,7 @@ const FieldVisitReport: React.FC<FieldVisitReportProps> = ({
   previewData, 
   onClose
 }) => {
-  // ✅ State must be inside the component
+  // 
   const [zoomImage, setZoomImage] = useState<string | null>(null);
   
   // 1. MODAL GUARDS
@@ -81,7 +81,7 @@ const FieldVisitReport: React.FC<FieldVisitReportProps> = ({
                   </div>
                   <div style={mInfoGrid}>
                     {[
-                      ['Auditor', auditorName],
+                      ['ASM Name', auditorName],
                       ['Territory', territory],
                       ['Route', route],
                       ['Region', region],

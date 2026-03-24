@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FiPackage } from "react-icons/fi";
 import StepShell from "../StepShell";
 
@@ -67,7 +67,6 @@ const DEFAULT_CATEGORIES: StockCategory[] = [
     items: [
       { id: "cr1", itemName: "", stockLevel: "", systemStock: "" },
       { id: "cr2", itemName: "", stockLevel: "", systemStock: "" },
-      
     ],
   },
   {
@@ -76,7 +75,6 @@ const DEFAULT_CATEGORIES: StockCategory[] = [
       { id: "g1", itemName: "", stockLevel: "", systemStock: "" },
     ],
   },
- 
 ];
 
 // ── Prop types ────────────────────────────────────────────────────────────────
@@ -104,10 +102,63 @@ const cellInput: React.CSSProperties = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 const StockStatusStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }: Props) => {
-  const [categories, setCategories] = useState<StockCategory[]>(
-    initialData?.categories ?? DEFAULT_CATEGORIES
-  );
+  // Initialize from localStorage with fallback
+  const [categories, setCategories] = useState<StockCategory[]>(() => {
+    console.log("🎬 StockStatus: Initializing...");
+    
+    // Priority 1: Use initialData from parent if it has content
+    if (initialData?.categories && initialData.categories.length > 0) {
+      const hasData = initialData.categories.some(cat => 
+        cat.items.some(item => item.itemName || item.stockLevel || item.systemStock) || cat.comment
+      );
+      if (hasData) {
+        console.log("✅ Using initialData from parent");
+        return initialData.categories;
+      }
+    }
+    
+    // Priority 2: Load from localStorage
+    try {
+      const saved = localStorage.getItem("stockStatus");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.categories && Array.isArray(parsed.categories)) {
+          const hasData = parsed.categories.some((cat: StockCategory) => 
+            cat.items.some((item: StockItem) => item.itemName || item.stockLevel || item.systemStock) || cat.comment
+          );
+          if (hasData) {
+            console.log("✅ Loaded from localStorage");
+            return parsed.categories;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("❌ Failed to parse stockStatus:", err);
+    }
+    
+    console.log("⚠️ Using DEFAULT_CATEGORIES");
+    return DEFAULT_CATEGORIES;
+  });
+  
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // ✅ Auto-save WITHOUT metadata (clean structure only)
+  useEffect(() => {
+    const hasData = categories.some(cat => 
+      cat.items.some(item => item.itemName || item.stockLevel || item.systemStock) || cat.comment
+    );
+    
+    if (hasData) {
+      const timer = setTimeout(() => {
+        // ✅ Save ONLY categories - NO metadata
+        const payload = { categories };
+        console.log("💾 Auto-saving stockStatus");
+        localStorage.setItem("stockStatus", JSON.stringify(payload));
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [categories]);
 
   // Update a specific item field
   const handleItemChange = (
@@ -157,7 +208,10 @@ const StockStatusStep = ({ totalSteps, stepNumber, initialData, onNext, onBack }
   };
 
   const handleNext = () => {
-    if (validate()) onNext({ categories });
+    if (validate()) {
+      console.log("📤 StockStatus: Sending data to parent");
+      onNext({ categories });
+    }
   };
 
   // ── Render ────────────────────────────────────────────────────────────────

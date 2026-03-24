@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import axios from "axios";
+import Swal from 'sweetalert2';
 
 // ── React Icons ───────────────────────────────────────────────────────────────
 import {
@@ -34,7 +36,7 @@ const STEPS = [
   { label: "DB Profile",        Icon: FiHome           },
   { label: "Sales Snapshot",    Icon: FiBarChart2      },
   { label: "Stock Status",      Icon: FiPackage        },
-  { label: "Issues Identified", Icon: FiAlertTriangle },
+  { label: "Issues Identified", Icon: FiAlertTriangle  },
   { label: "Actions Agreed",    Icon: FiCheckSquare    },
   { label: "Follow Up",         Icon: FiBell           },
   { label: "Remarks",           Icon: FiFileText       },
@@ -54,16 +56,56 @@ interface AllFormData {
 }
 
 const DailyTask = () => {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [allData, setAllData] = useState<AllFormData>({});
+  //Load data on mount (step is already initialized above)
+  const [currentStep, setCurrentStep] = useState(() => {
+    const saved = localStorage.getItem("currentStepIndex");
+    if (saved) {
+      const stepNum = parseInt(saved, 10);
+      console.log(`🎬 Initializing with saved step: ${stepNum}`);
+      return stepNum;
+    }
+    console.log(`🎬 Initializing with step 1`);
+    return 1;
+  });
   
- 
-const [loggedInUser] = useState<any>(() => {
-  const stored = localStorage.getItem("user");
-  return stored ? JSON.parse(stored) : null;
-});
+  const [allData, setAllData] = useState<AllFormData>({});
+  const [isChecking, setIsChecking] = useState(false);
+  
+  const [loggedInUser] = useState<any>(() => {
+    const stored = localStorage.getItem("user");
+    return stored ? JSON.parse(stored) : null;
+  });
 
+  //Load data on mount (step is already initialized above)
   useEffect(() => {
+    console.log("🔄 Loading saved data from localStorage...");
+    
+    const keys: (keyof AllFormData)[] = [
+      "visitDetails", "dbProfile", "salesPerformance", "stockStatus",
+      "issuesIdentified", "actionsAgreed", "followUp", "remarks"
+    ];
+
+    const restoredData: AllFormData = {};
+    keys.forEach(key => {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        try {
+          restoredData[key] = JSON.parse(saved);
+          console.log(`✅ Loaded ${key}`);
+        } catch (err) {
+          console.error(`❌ Failed to parse ${key}:`, err);
+        }
+      }
+    });
+
+    console.log("📦 Setting allData:", restoredData);
+    setAllData(restoredData);
+  }, []);
+
+  // ── 2. PERSISTENCE: Save step index to keep user position ────────────────
+  useEffect(() => {
+    console.log(`💾 Saving current step: ${currentStep}`);
+    localStorage.setItem("currentStepIndex", currentStep.toString());
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [currentStep]);
 
@@ -80,7 +122,7 @@ const [loggedInUser] = useState<any>(() => {
     };
   };
 
-  // ── Navigation ─────────────────────────────────────────────────────────────
+  // ── Navigation & Validation ────────────────────────────────────────────────
   const goNext = (key: keyof AllFormData, data: any) => {
     setAllData((prev) => ({ ...prev, [key]: data }));
     if (currentStep < TOTAL) setCurrentStep((s) => s + 1);
@@ -94,9 +136,60 @@ const [loggedInUser] = useState<any>(() => {
     setCurrentStep(stepNumber);
   };
 
+  /**
+   * Step 1 Validation
+   * Checks backend if a report for this DB Code already exists for today.
+   */
+  const handleVisitDetailsSubmit = async (data: any) => {
+    setIsChecking(true);
+    
+    try {
+      // Check for duplicate submission
+      const response = await axios.get(
+        `http://localhost:8080/api/visit-details/check-today/${loggedInUser.name}/${data.dbCode}`
+      );
+      
+      if (response.data === true) {
+        Swal.fire({
+          title: 'Already Submitted',
+          text: `You have already completed a visit for ${data.dbName} today.`,
+          icon: 'warning',
+          confirmButtonColor: '#164976',
+        });
+        setIsChecking(false);
+        return;  // Stop here - don't save or proceed
+      }
+    } catch (err) {
+      console.error("Check failed, allowing progress for offline capability", err);
+      // Continue to save even if check fails
+    }
+
+    // ALWAYS save and proceed (whether check passed or failed)
+    try {
+      // Generate or retrieve Report ID
+      let reportGroupId = localStorage.getItem("reportGroupId");
+      if (!reportGroupId) {
+        reportGroupId = `ASM-${data.dbCode}-${Date.now()}`;
+        localStorage.setItem("reportGroupId", reportGroupId);
+      }
+
+      // Save to localStorage with report ID
+      const payload = { ...data, reportGroupId };
+      console.log("💾 Saving visitDetails:", payload);
+      localStorage.setItem("visitDetails", JSON.stringify(payload));
+      
+      // Move to next step
+      goNext("visitDetails", payload);
+      
+    } catch (saveErr) {
+      console.error("❌ Failed to save data:", saveErr);
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
   const progressPct = ((currentStep - 1) / (TOTAL - 1)) * 100;
 
-  // ✅ Top-Level Safety: If no user, show error instead of broken form
   if (!loggedInUser) {
     return (
       <div style={{ padding: "50px", textAlign: "center", color: "#164976" }}>
@@ -208,7 +301,7 @@ const [loggedInUser] = useState<any>(() => {
           z-index: 1;
           overflow: visible;
           transition: box-shadow 0.3s ease;
-          cursor: default;
+          cursor: pointer;
           margin-top: 3px;
         }
         .step-bubble.done     { background: #164976; color: #fff; box-shadow: 0 4px 12px rgba(22,73,118,0.28); }
@@ -299,11 +392,11 @@ const [loggedInUser] = useState<any>(() => {
         .stepper-wrapper::-webkit-scrollbar-thumb { background: rgba(22,73,118,0.18); border-radius: 10px; }
       `}</style>
 
+      {isChecking && <div className="loader-overlay">Validating...</div>}
+
       <div className="dtr-root">
         <div className="dtr-card">
-          <div className="dtr-header-badge">
-            <FiClipboard size={12} /> DB Visit Report
-          </div>
+          <div className="dtr-header-badge"><FiClipboard size={12} /> DB Visit Report</div>
           <h1 className="dtr-title">Daily Task Report</h1>
           <p className="dtr-subtitle">Track your distributor visits and performance reviews</p>
 
@@ -321,9 +414,7 @@ const [loggedInUser] = useState<any>(() => {
                     <motion.div
                       className={`step-bubble ${state}`}
                       onClick={() => goToStep(n)}
-                      style={{ cursor: "pointer" }}
                       animate={{ scale: state === "active" ? 1.18 : 1 }}
-                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
                     >
                       {state === "done" ? <FiCheck size={15} strokeWidth={3} /> : <Icon size={15} />}
                     </motion.div>
@@ -337,71 +428,53 @@ const [loggedInUser] = useState<any>(() => {
           {/* ── Step Content ───────────────────────────────────────────── */}
           <div style={{ position: "relative" }}>
             
-            {/* Step 1: Visit Details (The Generator) */}
             <div style={{ display: currentStep === 1 ? "block" : "none" }}>
-              {loggedInUser && (
-                <VisitDetailsStep 
-                  totalSteps={TOTAL} 
-                  stepNumber={1} 
-                  initialData={allData.visitDetails} 
-                  onNext={(data) => {
-                    // ✅ Generate Unique Report ID once here
-                    const reportGroupId = `RPT-${data.dbCode}-${Date.now()}`;
-                    localStorage.setItem("reportGroupId", reportGroupId);
-
-                    const payload = { ...data, reportGroupId };
-                    localStorage.setItem("visitDetails", JSON.stringify(payload));
-                    goNext("visitDetails", payload);
-                  }}
-                  onBack={goBack}
-                  username={loggedInUser.name}  
-                  role={loggedInUser.role}       
-                  roleValue=""                   
-                />
-              )}
+              <VisitDetailsStep 
+                totalSteps={TOTAL} stepNumber={1} 
+                initialData={allData.visitDetails} 
+                onNext={handleVisitDetailsSubmit}
+                onBack={goBack}
+                username={loggedInUser.name} 
+                role={loggedInUser.role} 
+                roleValue=""
+              />
             </div>
 
-            {/* Step 2: DB Profile */}
             <div style={{ display: currentStep === 2 ? "block" : "none" }}>
-              {loggedInUser && (
-                <DBProfileStep
-                  totalSteps={TOTAL}
-                  stepNumber={2}
-                  initialData={allData.dbProfile}
-                  username={loggedInUser.name}
-                  onNext={(data) => {
-                    const payload = wrapWithMetadata(data);
-                    // Add legacy specific key for DB Profile
-                    payload.createdByName = loggedInUser.name;
-                    localStorage.setItem("dbProfile", JSON.stringify(payload));
-                    goNext("dbProfile", payload);
-                  }}
-                  onBack={goBack}
-                />
-              )}
+              <DBProfileStep
+                totalSteps={TOTAL} 
+                stepNumber={2}
+                initialData={allData.dbProfile}
+                username={loggedInUser.name}
+                onNext={(data) => {
+                  console.log("💾 DBProfile onNext called with:", data);
+                  const payload = wrapWithMetadata(data);
+                  payload.createdByName = loggedInUser.name;
+                  console.log("💾 Saving dbProfile:", payload);
+                  localStorage.setItem("dbProfile", JSON.stringify(payload));
+                  goNext("dbProfile", payload);
+                }}
+                onBack={goBack}
+              />
             </div>
 
-            {/* Step 3: Sales Performance */}
             <div style={{ display: currentStep === 3 ? "block" : "none" }}>
-              {loggedInUser && (
-                <SalesPerformanceStep
-                  totalSteps={TOTAL}
-                  stepNumber={3}
-                  initialData={allData.salesPerformance}
-                  onNext={(data) => {
-                    const payload = wrapWithMetadata(data);
-                    localStorage.setItem("salesPerformance", JSON.stringify(payload));
-                    goNext("salesPerformance", payload);
-                  }}
-                  onBack={goBack}
-                />
-              )}
+              <SalesPerformanceStep
+                totalSteps={TOTAL} 
+                stepNumber={3}
+                initialData={allData.salesPerformance}
+                onNext={(data) => {
+                  const payload = wrapWithMetadata(data);
+                  localStorage.setItem("salesPerformance", JSON.stringify(payload));
+                  goNext("salesPerformance", payload);
+                }}
+                onBack={goBack}
+              />
             </div>
 
-            {/* Step 4: Stock Status */}
             <div style={{ display: currentStep === 4 ? "block" : "none" }}>
               <StockStatusStep
-                totalSteps={TOTAL}
+                totalSteps={TOTAL} 
                 stepNumber={4}
                 initialData={allData.stockStatus}
                 onNext={(data) => {
@@ -413,10 +486,9 @@ const [loggedInUser] = useState<any>(() => {
               />
             </div>
 
-            {/* Step 5: Issues Identified */}
             <div style={{ display: currentStep === 5 ? "block" : "none" }}>
               <IssuesIdentifiedStep
-                totalSteps={TOTAL}
+                totalSteps={TOTAL} 
                 stepNumber={5}
                 initialData={allData.issuesIdentified}
                 onNext={(data) => {
@@ -428,10 +500,9 @@ const [loggedInUser] = useState<any>(() => {
               />
             </div>
 
-            {/* Step 6: Actions Agreed */}
             <div style={{ display: currentStep === 6 ? "block" : "none" }}>
               <ActionsAgreedStep
-                totalSteps={TOTAL}
+                totalSteps={TOTAL} 
                 stepNumber={6}
                 initialData={allData.actionsAgreed}
                 onNext={(data) => {
@@ -440,26 +511,17 @@ const [loggedInUser] = useState<any>(() => {
                   goNext("actionsAgreed", payload);
                 }}
                 onBack={goBack}
-                visitDetails={JSON.parse(localStorage.getItem("visitDetails") || "{}")}  
+                visitDetails={allData.visitDetails || {}}
               />
             </div>
 
-            {/* Step 7: Follow-Up */}
             <div style={{ display: currentStep === 7 ? "block" : "none" }}>
               <FollowUpStep
-                totalSteps={TOTAL}
+                totalSteps={TOTAL} 
                 stepNumber={7}
                 initialData={allData.followUp}
                 onNext={(data) => {
-                  // FollowUp mapping to DTO
-                  const baseData = {
-                    rows: data.rows.map((r: any) => ({
-                      action: r.action,
-                      responsible: r.responsible,
-                      deadline: r.deadline
-                    }))
-                  };
-                  const payload = wrapWithMetadata(baseData);
+                  const payload = wrapWithMetadata(data);
                   localStorage.setItem("followUp", JSON.stringify(payload));
                   goNext("followUp", payload);
                 }}
@@ -467,10 +529,9 @@ const [loggedInUser] = useState<any>(() => {
               />
             </div>
 
-            {/* Step 8: Remarks */}
             <div style={{ display: currentStep === 8 ? "block" : "none" }}>
               <RemarksStep
-                totalSteps={TOTAL}
+                totalSteps={TOTAL} 
                 stepNumber={8}
                 initialData={allData.remarks}
                 onNext={(data) => {

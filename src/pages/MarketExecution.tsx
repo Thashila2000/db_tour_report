@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import {
   FiShoppingCart, FiPlus, FiTrash2,
-  FiUpload, FiImage, FiFileText, FiCheckCircle, FiMap, FiGlobe
+  FiUpload, FiImage, FiFileText, FiMap, FiGlobe, FiCheckCircle
 } from "react-icons/fi";
+import Swal from "sweetalert2";
 
 // --- Interfaces ---
 interface ReviewRow {
@@ -21,7 +22,7 @@ interface MegaOutlet {
   outletImage: File | null;
 }
 
-// --- Helpers ---
+// --- Helpers --- 
 const generateReportId = (userName: string) => {
   const timestamp = new Date().getTime();
   const randomStr = Math.random().toString(36).slice(2, 7).toUpperCase();
@@ -63,10 +64,10 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-// --- Styles ---
+// --- Styles (Matching Stock Status) ---
 const fieldInput: React.CSSProperties = {
   width: "100%",
-  padding: "12px 14px",
+  padding: "10px 12px",
   borderRadius: "8px",
   border: "1.5px solid #4a6d8c",
   background: "rgba(22,73,118,0.04)",
@@ -82,38 +83,35 @@ const labelSt: React.CSSProperties = {
   fontSize: "11px",
   fontWeight: 700,
   color: "#4a6d8c",
-  letterSpacing: "0.05em",
+  letterSpacing: "0.06em",
   textTransform: "uppercase",
   marginBottom: "8px",
 };
 
-const actionBtn: React.CSSProperties = {
-  height: "48px",
-  width: "200px",
+const smallDashedBtn: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  padding: "10px 24px",
   borderRadius: "10px",
   border: "1.5px dashed #164976",
   background: "#fff",
   color: "#164976",
   fontWeight: 700,
-  fontSize: "14px",
+  fontSize: "13px",
   cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "8px",
+  transition: "all 0.2s ease",
+  marginTop: "12px",
 };
 
 const MarketExecution = () => {
-  // Global Fields State
   const [territoryName, setTerritoryName] = useState("");
   const [routeName, setRouteName] = useState("");
-
   const [outlets, setOutlets] = useState<MegaOutlet[]>([newEmptyOutlet()]);
   const [reviews, setReviews] = useState<ReviewRow[]>(defaultReviewRows());
-  const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [finalReportId, setFinalReportId] = useState("");
 
   // Logic Handlers
   const handleOutletField = (id: string, field: keyof MegaOutlet, value: string) => {
@@ -155,7 +153,6 @@ const MarketExecution = () => {
     const newErrors: Record<string, string> = {};
     if (!territoryName.trim()) newErrors["territoryName"] = "Territory is required";
     if (!routeName.trim()) newErrors["routeName"] = "Route is required";
-
     outlets.forEach((o) => {
       if (!o.name.trim()) newErrors[`${o.id}-name`] = "Outlet name is required";
       if (!o.sales.trim()) newErrors[`${o.id}-sales`] = "Sales is required";
@@ -172,120 +169,90 @@ const MarketExecution = () => {
 
   const handleSubmit = async () => {
     if (!validate()) {
-      alert("⚠️ Please fill in all required fields before submitting.");
+      Swal.fire({ icon: 'warning', title: 'Incomplete Fields', text: 'Please fill in all required fields.', confirmButtonColor: '#164976' });
       return;
     }
-
+    Swal.fire({ title: 'Submitting Report', text: 'Processing data...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
     setSubmitting(true);
 
     try {
       const userStr = localStorage.getItem("user");
-      if (!userStr) {
-        alert("❌ User not logged in. Please log in first.");
-        setSubmitting(false);
-        return;
-      }
-
+      if (!userStr) throw new Error("User not logged in.");
       const loggedInUser = JSON.parse(userStr);
       const sharedId = generateReportId(loggedInUser.name);
 
-      // Map Outlets
-      const outletPayload = await Promise.all(
-        outlets.map(async (o) => ({
-          name: o.name,
-          sales: o.sales,
-          discount: o.discount,
-          sku: o.sku,
-          outletImageBase64: o.outletImage ? await fileToBase64(o.outletImage) : null,
-        }))
-      );
+      const outletPayload = await Promise.all(outlets.map(async (o) => ({
+        name: o.name, sales: o.sales, discount: o.discount, sku: o.sku,
+        outletImageBase64: o.outletImage ? await fileToBase64(o.outletImage) : null,
+      })));
 
-      // Map Reviews
-      const reviewPayload = await Promise.all(
-        reviews.map(async (r) => ({
-          area: r.area,
-          observation: r.observation,
-          imageBase64: r.image ? await fileToBase64(r.image) : null,
-          isDefault: ['r1', 'r2', 'r3', 'r4', 'r5', 'r6'].includes(r.id),
-        }))
-      );
+      const reviewPayload = await Promise.all(reviews.map(async (r) => ({
+        area: r.area, observation: r.observation, 
+        imageBase64: r.image ? await fileToBase64(r.image) : null,
+        isDefault: ['r1', 'r2', 'r3', 'r4', 'r5', 'r6'].includes(r.id),
+      })));
 
-      // --- FINAL MASTER PAYLOAD ---
       const masterPayload = {
-        reportGroupId: sharedId,
-        userName: loggedInUser.name,
-        userRole: loggedInUser.role,
-        region: loggedInUser.region || "N/A", // Passing Region from Login Data
-        territoryName: territoryName,         // Passing Territory
-        routeName: routeName,                 // Passing Route
-        outlets: outletPayload,
-        reviews: reviewPayload
+        reportGroupId: sharedId, userName: loggedInUser.name, userRole: loggedInUser.role,
+        region: loggedInUser.region || "N/A", territoryName, routeName,
+        outlets: outletPayload, reviews: reviewPayload
       };
 
       const response = await fetch("http://localhost:8080/api/market-execution/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(masterPayload),
       });
 
       if (response.ok) {
-        setFinalReportId(sharedId);
-        setSubmitted(true);
+        Swal.fire({ icon: 'success', title: 'Synchronized!', text: 'Submitted successfully.', confirmButtonColor: '#164976' })
+          .then(() => window.location.reload());
       } else {
-        const errorMsg = await response.text();
-        throw new Error(errorMsg || "Submission failed");
+        throw new Error(await response.text() || "Submission failed");
       }
     } catch (error: any) {
-      alert("❌ Submission Error: " + error.message);
+      Swal.fire({ icon: 'error', title: 'Error', text: error.message, confirmButtonColor: '#164976' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (submitted) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif", background: "linear-gradient(135deg, #f8fafd 0%, #e8f0f7 100%)", padding: "2rem" }}>
-        <div style={{ background: "white", borderRadius: "20px", boxShadow: "0 20px 60px rgba(22,73,118,0.15)", padding: "3rem 2rem", maxWidth: "500px", width: "100%", textAlign: "center" }}>
-          <div style={{ width: "80px", height: "80px", background: "linear-gradient(135deg, #10b981, #059669)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.5rem", boxShadow: "0 10px 30px rgba(16,185,129,0.3)" }}>
-            <FiCheckCircle size={40} color="white" strokeWidth={3} />
-          </div>
-          <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: "1.75rem", fontWeight: 800, color: "#0c2340", margin: "0 0 0.5rem 0" }}>Submission Successful!</h2>
-          <p style={{ fontSize: "14px", color: "#6e90b0", margin: "0 0 0.5rem 0" }}>Report ID: <b>{finalReportId}</b></p>
-          <p style={{ fontSize: "14px", color: "#6e90b0", margin: "0 0 2rem 0", lineHeight: "1.6" }}>Market report for {territoryName} has been saved.</p>
-          <button onClick={() => window.location.reload()} style={{ background: "linear-gradient(135deg, #164976, #1e6aad)", color: "white", padding: "14px 32px", borderRadius: "12px", border: "none", fontWeight: 700, fontSize: "14px", cursor: "pointer" }}>Submit Another Report</button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ fontFamily: "'DM Sans', sans-serif", display: "flex", flexDirection: "column", gap: "2rem", padding: "15px", maxWidth: "1200px", margin: "0 auto" }}>
+    <div style={{ maxWidth: "1100px", margin: "40px auto", padding: "0 20px", fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700&family=Sora:wght@700;800&display=swap');
-        .me-upload-btn:hover { border-color: #164976 !important; background: rgba(22,73,118,0.08) !important; }
+        
         .action-btn:hover { background: #164976 !important; color: #fff !important; }
-        .header-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; background: #f1f5f9; padding: 20px; borderRadius: 16px; border: 1.5px solid #cbd5e1; }
-        @media (max-width: 768px) { .header-grid { grid-template-columns: 1fr; } .outlet-grid { grid-template-columns: 1fr !important; } }
+        .upload-area:hover { border-color: #164976 !important; background: rgba(22,73,118,0.06) !important; }
+        
+        /* Mobile shadow fix - target only cards */
+        @media (max-width: 768px) {
+          div[style*="boxShadow: 0 4px 12px"] {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+          }
+        }
       `}</style>
 
-      {/* Header */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-          <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: "#164976", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <FiShoppingCart size={24} color="white" />
-          </div>
-          <h1 style={{ fontFamily: "'Sora', sans-serif", fontSize: "1.5rem", margin: 0, color: "#164976" }}>Market Review</h1>
+      {/* STOCK STATUS STYLE PAGE HEADER */}
+      <div style={{ marginBottom: "2.5rem", display: "flex", alignItems: "center", gap: "15px" }}>
+        <div style={{ background: "linear-gradient(135deg, #164976, #1e6aad)", padding: "12px", borderRadius: "12px", display: "flex", alignItems: "center" }}>
+          <FiShoppingCart size={24} color="white" />
         </div>
+        <div>
+          <h1 style={{ margin: 0, fontFamily: "'Sora', sans-serif", fontSize: "22px", color: "#164976", fontWeight: 800 }}>Market Execution Report</h1>
+          <p style={{ margin: 0, fontSize: "13px", color: "#4a6d8c", fontWeight: 500 }}>Daily route performance and outlet standards audit</p>
+        </div>
+      </div>
 
-        {/* Territory & Route Section */}
-        <div className="header-grid">
+      <div style={{ display: "flex", flexDirection: "column", gap: "2.5rem" }}>
+        
+        {/* HEADER INFO SECTION */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", background: "rgba(22,73,118,0.02)", padding: "24px", borderRadius: "16px", border: "1.5px solid #cbd5e1" }}>
           <div>
             <label style={labelSt}><FiMap size={12} /> Territory Name *</label>
             <input 
               style={{ ...fieldInput, background: "#fff", border: errors["territoryName"] ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }} 
               placeholder="e.g. North Zone" value={territoryName} onChange={(e) => setTerritoryName(e.target.value)} disabled={submitting} 
             />
-            {errors["territoryName"] && <span style={{ fontSize: "11px", color: "#f87171", marginTop: "4px", display: "block" }}>{errors["territoryName"]}</span>}
           </div>
           <div>
             <label style={labelSt}><FiGlobe size={12} /> Route / Area *</label>
@@ -293,223 +260,106 @@ const MarketExecution = () => {
               style={{ ...fieldInput, background: "#fff", border: errors["routeName"] ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }} 
               placeholder="e.g. Route A-12" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={submitting} 
             />
-            {errors["routeName"] && <span style={{ fontSize: "11px", color: "#f87171", marginTop: "4px", display: "block" }}>{errors["routeName"]}</span>}
           </div>
         </div>
-      </div>
 
-      {/* Outlet Section */}
-      <section>
-        <div style={{ fontFamily: "'Sora', sans-serif", fontSize: "1.1rem", color: "#164976", borderBottom: "2px solid #cbd5e1", paddingBottom: "12px", display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
-          <FiShoppingCart size={18} /> Outlet Details
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "25px" }}>
-          {outlets.map((outlet, idx) => (
-            <div key={outlet.id} style={{ borderRadius: "16px", border: "1.5px solid #4a6d8c", background: "#fff", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.05)" }}>
-              <div style={{ background: "#164976", padding: "14px 20px", display: "flex", justifyContent: "space-between", color: "white", borderTopLeftRadius: "14px", borderTopRightRadius: "14px" }}>
-                <span style={{ fontSize: "13px", fontWeight: 700 }}>OUTLET {idx + 1}</span>
-                {outlets.length > 1 && <FiTrash2 style={{ cursor: "pointer" }} onClick={() => removeOutlet(outlet.id)} />}
-              </div>
-              <div style={{ padding: "20px" }}>
-                <div className="outlet-grid" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "20px", marginBottom: "20px" }}>
-                  <div>
-                    <label style={labelSt}>Outlet Name *</label>
-                    <input style={{ ...fieldInput, border: errors[`${outlet.id}-name`] ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }} placeholder="Store Name" value={outlet.name} onChange={(e)=>handleOutletField(outlet.id, "name", e.target.value)} disabled={submitting} />
-                  </div>
-                  <div>
-                    <label style={labelSt}>Avg. Sales *</label>
-                    <input style={{ ...fieldInput, border: errors[`${outlet.id}-sales`] ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }} placeholder="0.00" value={outlet.sales} onChange={(e)=>handleNumericField(outlet.id, "sales", e.target.value)} disabled={submitting} />
-                  </div>
-                  <div>
-                    <label style={labelSt}>Discount (%) *</label>
-                    <input style={{ ...fieldInput, border: errors[`${outlet.id}-discount`] ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }} placeholder="0" value={outlet.discount ? `${outlet.discount}%` : ""} onChange={(e)=>handleDiscountField(outlet.id, e.target.value)} disabled={submitting} />
-                  </div>
-                  <div>
-                    <label style={labelSt}>SKU Amount *</label>
-                    <input style={{ ...fieldInput, border: errors[`${outlet.id}-sku`] ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }} placeholder="0" value={outlet.sku} onChange={(e)=>handleNumericField(outlet.id, "sku", e.target.value)} disabled={submitting} />
-                  </div>
+        {/* OUTLET SECTION (Card Style from Stock Status) */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+            <FiShoppingCart color="#164976" size={18} />
+            <span style={{ fontFamily: "'Sora', sans-serif", fontSize: "14px", fontWeight: 700, color: "#164976", textTransform: "uppercase", letterSpacing: "0.05em" }}>Outlet Details</span>
+          </div>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+            {outlets.map((outlet, idx) => (
+              <div key={outlet.id} style={{ borderRadius: "14px", border: "1.5px solid #4a6d8c", overflow: "hidden", background: "#fff", boxShadow: "0 4px 12px rgba(0,0,0,0.03)" }}>
+                <div style={{ background: "linear-gradient(135deg, #164976, #1e6aad)", padding: "10px 18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: "white", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Outlet #{idx + 1}</span>
+                  {outlets.length > 1 && <FiTrash2 color="white" style={{ cursor: "pointer", opacity: 0.8 }} onClick={() => removeOutlet(outlet.id)} />}
                 </div>
-                <label htmlFor={`img-${outlet.id}`} className="me-upload-btn" style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px", border: "1.5px dashed #4a6d8c", borderRadius: "10px", cursor: submitting ? "not-allowed" : "pointer", background: "rgba(22,73,118,0.02)" }}>
-                  <FiImage color="#4a6d8c" size={20} />
-                  <span style={{ fontSize: "14px", color: "#164976" }}>{outlet.outletImage ? outlet.outletImage.name : "Upload Outlet Photo"}</span>
-                  <input id={`img-${outlet.id}`} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => handleOutletImage(outlet.id, e.target.files?.[0] || null)} disabled={submitting} />
-                </label>
+                <div style={{ padding: "18px" }}>
+                   <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "12px", marginBottom: "15px" }}>
+                      <div><label style={labelSt}>Outlet Name *</label><input style={{ ...fieldInput, border: errors[`${outlet.id}-name`] ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }} placeholder="Store Name" value={outlet.name} onChange={(e)=>handleOutletField(outlet.id, "name", e.target.value)} disabled={submitting} /></div>
+                      <div><label style={labelSt}>Avg Sales *</label><input style={{ ...fieldInput, border: errors[`${outlet.id}-sales`] ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }} placeholder="0.00" value={outlet.sales} onChange={(e)=>handleNumericField(outlet.id, "sales", e.target.value)} disabled={submitting} /></div>
+                      <div><label style={labelSt}>Disc (%) *</label><input style={{ ...fieldInput, border: errors[`${outlet.id}-discount`] ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }} placeholder="0" value={outlet.discount ? `${outlet.discount}%` : ""} onChange={(e)=>handleDiscountField(outlet.id, e.target.value)} disabled={submitting} /></div>
+                      <div><label style={labelSt}>SKU Amount *</label><input style={{ ...fieldInput, border: errors[`${outlet.id}-sku`] ? "1.5px solid #f87171" : "1.5px solid #4a6d8c" }} placeholder="0" value={outlet.sku} onChange={(e)=>handleNumericField(outlet.id, "sku", e.target.value)} disabled={submitting} /></div>
+                   </div>
+                   <label className="upload-area" style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px", border: "1.5px dashed #4a6d8c", borderRadius: "8px", cursor: "pointer", background: "rgba(22,73,118,0.01)", transition: "0.2s" }}>
+                      <FiImage color="#164976" size={16} />
+                      <span style={{ fontSize: "13px", color: "#164976", fontWeight: 600 }}>{outlet.outletImage ? outlet.outletImage.name : "Upload Outlet Photo"}</span>
+                      <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => handleOutletImage(outlet.id, e.target.files?.[0] || null)} disabled={submitting} />
+                   </label>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-        <button onClick={addExtraOutlet} className="action-btn" style={{...actionBtn, marginTop: "20px"}} disabled={submitting}><FiPlus /> Add New Outlet</button>
-      </section>
-
-      {/* Review Table Section */}
-        <section style={{ animation: "fadeInUp 0.7s ease-out" }}>
-          <div style={{ 
-            fontFamily: "'Sora', sans-serif", 
-            fontSize: "1.2rem", 
-            color: "#164976", 
-            borderBottom: "3px solid #164976", 
-            paddingBottom: "14px", 
-            display: "flex", 
-            alignItems: "center", 
-            gap: "12px", 
-            marginBottom: "24px",
-            fontWeight: 800,
-            background: "linear-gradient(to right, #164976, #1e6aad)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent"
-          }}>
-            <div style={{
-              width: "32px",
-              height: "32px",
-              background: "linear-gradient(135deg, #164976, #1e6aad)",
-              borderRadius: "8px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center"
-            }}>
-              <FiFileText size={18} color="white" strokeWidth={2.5} />
-            </div>
-            Performance Assessment
+            ))}
+            <div><button style={smallDashedBtn} className="action-btn" onClick={addExtraOutlet} disabled={submitting}><FiPlus /> Add Outlet</button></div>
           </div>
-          <div 
-            className="scroll-container" 
-            style={{ 
-              border: "2px solid #1e293b", 
-              background: "linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,255,255,0.9))",
-              borderRadius: "16px",
-              overflow: "hidden",
-              boxShadow: "0 8px 20px rgba(22,73,118,0.08)"
-            }}
-          >
-            <table className="wide-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+        </div>
+
+        {/* ASSESSMENT SECTION (Table Style from Stock Status) */}
+        <div style={{ borderRadius: "14px", border: "1.5px solid #4a6d8c", overflow: "hidden", background: "#fff", boxShadow: "0 4px 12px rgba(0,0,0,0.03)" }}>
+          <div style={{ background: "linear-gradient(135deg, #164976, #1e6aad)", padding: "14px 18px", display: "flex", alignItems: "center", gap: "10px" }}>
+            <FiFileText size={16} color="white" />
+            <span style={{ fontFamily: "'Sora', sans-serif", fontSize: "14px", fontWeight: 700, color: "white", letterSpacing: "0.06em", textTransform: "uppercase" }}>Performance Assessment</span>
+          </div>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
               <thead>
-                <tr style={{ 
-                  background: "linear-gradient(135deg, #164976, #1e6aad)", 
-                  textAlign: "left", 
-                  fontSize: "12px", 
-                  color: "white",
-                  fontWeight: 700,
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase"
-                }}>
-                  <th style={{ padding: "18px 20px", width: "25%" }}>Review Area</th>
-                  <th style={{ padding: "18px 20px", width: "50%" }}>Observation</th>
-                  <th style={{ padding: "18px 20px", width: "15%" }}>Image</th>
-                  <th style={{ padding: "18px 20px", width: "10%" }}></th>
+                <tr style={{ background: "rgba(22,73,118,0.06)" }}>
+                  {["Review Area", "Observation Findings", "Evidence", ""].map((h) => (
+                    <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#4a6d8c", textTransform: "uppercase", borderBottom: "1px solid rgba(22,73,118,0.1)" }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {reviews.map((row, idx) => (
-                  <tr 
-                    key={row.id} 
-                    style={{ 
-                      borderTop: "1px solid #e2e8f0",
-                      background: idx % 2 === 0 ? "rgba(255,255,255,0.5)" : "rgba(248,250,252,0.5)"
-                    }}
-                  >
-                    <td style={{ padding: "14px 20px", width: "25%" }}>
+                  <tr key={row.id} style={{ background: idx % 2 === 0 ? "#fff" : "rgba(22,73,118,0.02)", borderBottom: "1px solid rgba(22,73,118,0.07)" }}>
+                    <td style={{ padding: "12px", width: "30%" }}>
                       <input 
-                        style={{ 
-                          ...fieldInput, 
-                          background: ['r1','r2','r3','r4','r5','r6'].includes(row.id) ? "rgba(241,245,249,0.8)" : "white",
-                          border: "2px solid #4a6d8c"
-                        }} 
-                        value={row.area} 
-                        onChange={(e) => handleReviewField(row.id, "area", e.target.value)} 
-                        disabled={submitting || ['r1','r2','r3','r4','r5','r6'].includes(row.id)}
-                        onFocus={(e) => {
-                          if (!['r1','r2','r3','r4','r5','r6'].includes(row.id)) {
-                            e.target.style.border = "2px solid #164976";
-                            e.target.style.background = "rgba(22,73,118,0.07)";
-                            e.target.style.boxShadow = "0 0 0 3px rgba(22,73,118,0.10)";
-                          }
-                        }}
-                        onBlur={(e) => {
-                          e.target.style.border = "2px solid #4a6d8c";
-                          e.target.style.background = ['r1','r2','r3','r4','r5','r6'].includes(row.id) ? "rgba(241,245,249,0.8)" : "white";
-                          e.target.style.boxShadow = "none";
-                        }}
+                        style={{ ...fieldInput, background: ['r1','r2','r3','r4','r5','r6'].includes(row.id) ? "transparent" : "#fff", border: ['r1','r2','r3','r4','r5','r6'].includes(row.id) ? "none" : "1.5px solid #4a6d8c", fontWeight: ['r1','r2','r3','r4','r5','r6'].includes(row.id) ? 700 : 400 }} 
+                        value={row.area} onChange={(e) => handleReviewField(row.id, "area", e.target.value)} 
+                        disabled={submitting || ['r1','r2','r3','r4','r5','r6'].includes(row.id)} 
                       />
                     </td>
-                    <td style={{ padding: "14px 20px", width: "50%" }}>
-                      <input 
-                        style={{...fieldInput, border: "2px solid #4a6d8c", background: "white"}} 
-                        placeholder="Findings..." 
-                        value={row.observation} 
-                        onChange={(e) => handleReviewField(row.id, "observation", e.target.value)} 
-                        disabled={submitting}
-                        onFocus={(e) => {
-                          e.target.style.border = "2px solid #164976";
-                          e.target.style.background = "rgba(22,73,118,0.07)";
-                          e.target.style.boxShadow = "0 0 0 3px rgba(22,73,118,0.10)";
-                        }}
-                        onBlur={(e) => {
-                          e.target.style.border = "2px solid #4a6d8c";
-                          e.target.style.background = "white";
-                          e.target.style.boxShadow = "none";
-                        }}
-                      />
+                    <td style={{ padding: "12px" }}>
+                      <input style={{ ...fieldInput, background: "#fff" }} placeholder="Findings..." value={row.observation} onChange={(e) => handleReviewField(row.id, "observation", e.target.value)} disabled={submitting} />
                     </td>
-                    <td style={{ padding: "14px 20px", width: "15%" }}>
+                    <td style={{ padding: "12px", width: "140px" }}>
                       {row.id === 'r1' || row.id === 'r2' ? (
-                        <span style={{ color: "#94a3b8", fontSize: "13px", fontWeight: 600 }}>N/A</span>
+                        <span style={{ color: "#94a3b8", fontSize: "12px", fontWeight: 700 }}>N/A</span>
                       ) : (
-                        <label 
-                          htmlFor={`rev-img-${row.id}`} 
-                          style={{ 
-                            cursor: "pointer", 
-                            fontSize: "13px", 
-                            color: row.image ? "#10b981" : "#164976", 
-                            display: "flex", 
-                            alignItems: "center", 
-                            gap: "6px", 
-                            fontWeight: 700,
-                            transition: "all 0.2s"
-                          }}
-                        >
-                          <FiUpload size={16} strokeWidth={2.5} /> {row.image ? "DONE ✓" : "UPLOAD"}
-                          <input 
-                            id={`rev-img-${row.id}`} 
-                            type="file" 
-                            accept="image/*" 
-                            style={{ display: "none" }} 
-                            onChange={(e) => handleReviewImage(row.id, e.target.files?.[0] || null)} 
-                            disabled={submitting} 
-                          />
+                        <label style={{ cursor: "pointer", color: row.image ? "#10b981" : "#164976", display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", fontWeight: 700 }}>
+                          <FiUpload size={14} /> {row.image ? "UPLOADED" : "UPLOAD"}
+                          <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => handleReviewImage(row.id, e.target.files?.[0] || null)} disabled={submitting} />
                         </label>
                       )}
                     </td>
-                    <td style={{ textAlign: "center", padding: "14px 20px", width: "10%" }}>
-                      {!['r1','r2','r3','r4','r5','r6'].includes(row.id) && (
-                        <FiTrash2 
-                          onClick={() => removeReviewRow(row.id)} 
-                          color="#ef4444" 
-                          size={18}
-                          strokeWidth={2.5}
-                          style={{ cursor: "pointer", transition: "all 0.2s" }}
-                        />
-                      )}
+                    <td style={{ padding: "12px", textAlign: "center", width: "50px" }}>
+                      {!['r1','r2','r3','r4','r5','r6'].includes(row.id) && <FiTrash2 onClick={() => removeReviewRow(row.id)} color="#ef4444" size={16} style={{ cursor: "pointer" }} />}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <button 
-            onClick={addReviewRow} 
-            className="action-btn" 
-            style={{...actionBtn, marginTop: "24px"}} 
-            disabled={submitting}
-          >
-            <FiPlus strokeWidth={2.5} /> Add Review
+          <div style={{ padding: "15px", background: "rgba(22,73,118,0.02)", borderTop: "1px solid rgba(22,73,118,0.1)" }}>
+             <button style={{ ...smallDashedBtn, marginTop: 0 }} className="action-btn" onClick={addReviewRow} disabled={submitting}><FiPlus /> Add Custom Area</button>
+          </div>
+        </div>
+
+        {/* FINAL SUBMIT ACTION */}
+        <div style={{ marginTop: "20px", padding: "30px", display: "flex", justifyContent: "flex-end" }}>
+          <button onClick={handleSubmit} disabled={submitting} style={{
+            background: "linear-gradient(135deg, #164976, #1e6aad)",
+            color: "white", padding: "14px 40px", borderRadius: "10px", border: "none",
+            fontSize: "15px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "10px",
+            boxShadow: "0 4px 15px rgba(22,73,118,0.2)"
+          }}>
+            <FiCheckCircle /> {submitting ? "Processing..." : "Submit Report"}
           </button>
-        </section>
+        </div>
 
-
-      <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "2px solid #cbd5e1", paddingTop: "30px" }}>
-        <button onClick={handleSubmit} disabled={submitting} style={{ background: "linear-gradient(135deg, #164976, #1e6aad)", color: "white", padding: "14px 40px", borderRadius: "12px", border: "none", fontWeight: 700, cursor: "pointer" }}>
-          {submitting ? "Submitting..." : "Submit Report"}
-        </button>
       </div>
     </div>
   );

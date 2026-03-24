@@ -63,7 +63,7 @@ export default function ReportModal({
             ) : previewData ? (
               <div style={mScroll} className="m-scroll">
 
-     {/* 1. Visit Information */}
+{/* 1. Visit Information */}
 <div style={mSection}>
   <div style={mSectionHead('#3b82f6')}>
     <div style={mSectionIcon('#3b82f6', '#dbeafe')}>
@@ -75,27 +75,43 @@ export default function ReportModal({
   <div style={mInfoGrid}>
     {/* Standard Text Information Mapping */}
     {[
-      ['DB Name',    previewData.visitDetails?.dbName],
-      ['Code',       previewData.visitDetails?.dbCode],
-      ['Visit Type', previewData.visitDetails?.visitType], 
-      ['Area',       previewData.visitDetails?.area],
-      ['Region',     previewData.visitDetails?.region],
-      ['Territory',  previewData.visitDetails?.territoryName],
-      ['Visit Time', (() => {
-        const raw = previewData.visitDetails?.visitTime; 
-        if (!raw || typeof raw !== 'string') return '—';
+      ['DB Name',     previewData.visitDetails?.dbName],
+      ['Code',        previewData.visitDetails?.dbCode],
+      ['Visit Type',  previewData.visitDetails?.visitType], 
+      ['Area',        previewData.visitDetails?.area],
+      ['Region',      previewData.visitDetails?.region],
+      ['Territory',   previewData.visitDetails?.territoryName],
+      
+       
+     
+
+       ['Visit Time', (() => {
+        const time24 = previewData.visitDetails?.actualVisitTime; // e.g. "14:30"
+          if (!time24) return '—';
+
+          const [hours, minutes] = time24.split(':');
+          let h = parseInt(hours, 10);
+           const suffix = h >= 12 ? 'PM' : 'AM';
+  
+        // Convert 0 to 12 (for Midnight) and 13-23 to 1-11
+            h = h % 12 || 12; 
+  
+        return `${h}:${minutes} ${suffix}`; // Results in "2:30 PM"
+     })()],
+      
+         ['Visit Date', (() => {
+           const raw = previewData.visitDetails?.visitTime; 
+           if (!raw || typeof raw !== 'string') return '—';
 
         try {
+          // Extracts just the date part (yyyy.mm.dd) from the system timestamp
           const parts = raw.split(' ');
           const datePart = parts[0]; 
-          const timePart = parts[1] ? parts[1].replace('.', ':') : ''; 
 
           const [y, m, d] = datePart.split('.');
           const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
           
-          const formattedDate = `${d} ${months[parseInt(m, 10) - 1]} ${y}`;
-          
-          return timePart ? `${formattedDate} | ${timePart}` : formattedDate;
+          return `${d} ${months[parseInt(m, 10) - 1]} ${y}`;
         } catch (e) {
           return raw; 
         }
@@ -107,17 +123,16 @@ export default function ReportModal({
       </div>
     ))}
 
-    {/*SECTION TO ADD IMAGE */}
+    {/* SECTION TO ADD IMAGE */}
     {previewData.visitDetails?.accompaniedByImage && (
       <div key="image_proof" style={{ ...mInfoChip, flexBasis: '100%', flexDirection: 'column', alignItems: 'flex-start', border: '1px dashed #3b82f6' }}>
         <span style={{ ...mChipLabel, marginBottom: '8px' }}>Proof of Visit (Photo)</span>
         
-        {/* Render the Base64 string directly in an <img> tag */}
         <img 
           src={previewData.visitDetails.accompaniedByImage} 
           alt="Visit proof photo" 
           style={{ 
-            maxWidth: '200px', // Prevents it from being too big in the preview
+            maxWidth: '200px', 
             maxHeight: '150px',
             borderRadius: '8px', 
             objectFit: 'cover', 
@@ -221,7 +236,7 @@ export default function ReportModal({
           src={img} 
           style={{ 
             width: '100%', 
-            height: '250px', // Increased space
+            height: '250px', 
             objectFit: 'contain', 
             borderRadius: '12px', 
             border: '1px solid #ddd6fe',

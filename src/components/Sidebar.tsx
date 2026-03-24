@@ -7,7 +7,6 @@ interface SidebarProps {
 }
 
 const NAV_ITEMS = [
- 
   { to: "/daily-task",   end: false, icon: FaTasks,         label: "Daily Task"  },
   { to: "/market-execution",  end: false, icon: FaMapMarkerAlt,  label: "Field Visit" },
   { to: "/reports", end: false, icon: FaTasks, label: "Reports" },
@@ -24,20 +23,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, closeSidebar }) => {
         />
       )}
 
-      <aside
-        className={`
-          fixed top-16 left-0 h-[calc(100vh-4rem)] z-50
-          w-60 flex flex-col
-          transform transition-transform duration-300 ease-in-out
-          ${isOpen ? "translate-x-0" : "-translate-x-full"}
-          md:translate-x-0
-        `}
-        style={{
-          background:  "linear-gradient(180deg, #0a1f33 0%, #0d2a44 40%, #102d4a 100%)",
-          borderRight: "1px solid rgba(255,255,255,0.06)",
-          boxShadow:   "4px 0 24px rgba(0,0,0,0.35)",
-        }}
-      >
+     <aside
+  className={`
+    fixed left-0 z-50 flex flex-col
+    top-16 bottom-0 w-110
+    md:top-16 md:w-50
+    transform transition-transform duration-300 ease-in-out
+    ${isOpen ? "translate-x-0" : "-translate-x-full"}
+    md:translate-x-0
+  `}
+  style={{
+    background:  "linear-gradient(180deg, #0a1f33 0%, #0d2a44 40%, #102d4a 100%)",
+    borderRight: "1px solid rgba(255,255,255,0.06)",
+  }}
+>
         {/* Top decorative accent line */}
         <div style={{
           height:     "2px",
@@ -59,7 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, closeSidebar }) => {
         </div>
 
         {/* Nav items */}
-        <nav style={{ padding: "0 12px", flex: 1 }}>
+        <nav style={{ padding: "0 12px", flex: 1, overflowY: "auto" }}>
           <ul style={{ listStyle: "none", margin: 0, padding: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
             {NAV_ITEMS.map(({ to, end, icon: Icon, label }) => (
               <li key={to}>
